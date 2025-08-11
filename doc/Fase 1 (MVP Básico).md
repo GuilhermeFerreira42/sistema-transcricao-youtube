@@ -1,3 +1,5 @@
+  - Fase 1 (MVP Básico): Está quase totalmente completa. As funcionalidades essenciais de transcrição e download de vídeos individuais estão implementadas e funcionando conforme o esperado. Pequenas diferenças de nomeclatura foram observadas, mas a funcionalidade é a mesma.
+
 # Checklist de Status do Projeto: Sistema de Transcrição YouTube
 
 Este documento reflete o estado atual de implementação do sistema, com base na análise do código-fonte e nos requisitos definidos na documentação do projeto.
@@ -60,3 +62,55 @@ Este documento reflete o estado atual de implementação do sistema, com base na
 
 - **[+] [+] Estratégia para Evitar Bloqueios** `[x]`
   - [cite_start]O `youtube_handler` utiliza `User-Agents` de navegadores reais e insere um delay aleatório entre as requisições no método de fallback para simular comportamento humano e reduzir o risco de bloqueios por parte do YouTube[cite: 22, 24, 25].
+
+
+----
+
+
+Com certeza! Vamos validar o que já foi feito no seu projeto com base nos arquivos fornecidos e na documentação.
+
+**Legenda:**
+- `[x]` - Completo
+- `[/]` - Parcialmente Implementado
+- `[ ]` - Não Iniciado
+- `[+]` - Funcionalidade Adicional Implementada (Não prevista inicialmente no checklist)
+
+---
+
+### **Checklist de Acompanhamento do Desenvolvimento**
+
+Este checklist permite monitorar o progresso de cada fase, garantindo que todos os componentes e marcos sejam atingidos.
+
+#### **Fase 1: MVP Básico (Duração: 2 semanas)**
+
+*   **Objetivo:** Entregar a funcionalidade central de transcrição e download de vídeos individuais.
+    *   **Componentes:**
+        *   [x] **`youtube_handler.py` completo:**
+            *   [x] Implementação da função `download_subtitles` para baixar legendas (PT-BR, PT, EN).
+                *   **Observação:** A função `download_subtitles` não existe explicitamente no `youtube_handler.py` fornecido. No entanto, a lógica de baixar legendas em múltiplos idiomas é encapsulada na função `download_and_clean_transcript` que utiliza `YouTubeTranscriptApi.get_transcript` e `download_subtitles_fallback` (que usa `yt-dlp`). Portanto, a funcionalidade está presente.
+            *   [x] Implementação da função `clean_subtitles` para remover timestamps e formatação.
+            *   [x] Implementação da função `download_and_clean_transcript`.
+            *   [x] Implementação da função `save_transcription` para salvar em JSON.
+                *   **Observação:** A função é `save_transcription_to_json` no código.
+            *   [x] Implementação da função `split_transcript_into_chunks`.
+        *   [x] **Rotas básicas de processamento (`app.py`):**
+            *   [x] Rota `/process_youtube_video` para iniciar o processamento.
+            *   [x] Rota `/download_transcription/<video_id>` para download do TXT.
+            *   [x] Rota `/get_transcription/<video_id>` para obter a transcrição completa.
+        *   [x] **Interface mínima funcional (`main.js`, `index.html`, `style.css`):**
+            *   [x] Campo de input para URL do YouTube.
+            *   [x] Botão para iniciar o processamento.
+            *   [x] Exibição da transcrição limpa na área central.
+            *   [x] Exibição de thumbnail e título do vídeo.
+            *   [x] Botão de download da transcrição em TXT.
+            *   [x] Animação de carregamento durante o processamento.
+        *   [x] **Download TXT básico:**
+            *   [x] Geração correta do arquivo TXT com conteúdo limpo.
+            *   [x] Nomeação do arquivo com o título do vídeo (sanitizado).
+            *   [x] Formatação básica do TXT (título, fonte, data).
+    *   **Marcos de Conclusão da Fase:**
+        *   [x] Capacidade de processar vídeos individuais do YouTube.
+        *   [x] Exibição básica da transcrição na interface.
+        *   [x] Download funcional da transcrição em TXT.
+        *   [x] Armazenamento básico das transcrições em JSON.
+
