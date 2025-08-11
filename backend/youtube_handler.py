@@ -67,7 +67,8 @@ class YouTubeHandler:
         """Verifica se o conteúdo indica que o Google bloqueou a requisição"""
         block_indicators = [
             "unusual traffic from your computer network",
-            "Our systems have detected unusual traffic from your computer network"
+            "Our systems have detected unusual traffic from your computer network",
+            "sending automated queries"
         ]
         content_lower = content.lower()
         return any(indicator.lower() in content_lower for indicator in block_indicators)
@@ -185,7 +186,6 @@ class YouTubeHandler:
         if self._is_google_block(raw_subtitles):
             logger.error("Conteúdo bloqueado pelo Google detectado.")
             return "Erro: O Google bloqueou a requisição."
-        
         try:
             data = json.loads(raw_subtitles)
             if 'events' in data:
@@ -245,6 +245,7 @@ class YouTubeHandler:
             "created_at": datetime.now().isoformat(),
             "format_version": "2.0"
         }
+        
         safe_title = self.sanitize_filename(title)
         filename = f"{video_id}_{safe_title[:50]}_{transcription_id[:8]}.json"
         filepath = os.path.join(self.output_dir, filename)
