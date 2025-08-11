@@ -13,7 +13,6 @@ __pycache__/
 # Ignorar arquivos de dados gerados
 data/transcriptions/
 *.json
-*.txt
 
 # Ignorar logs
 *.log
