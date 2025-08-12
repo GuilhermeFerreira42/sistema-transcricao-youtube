@@ -35,6 +35,8 @@ Este checklist permite monitorar o progresso de cada fase, garantindo que todos 
         *   [ ] Download funcional da transcrição em TXT.
         *   [ ] Armazenamento básico das transcrições em JSON.
 
+---
+
 #### **Fase 2: Histórico e Gerenciamento (Duração: 1.5 semanas)**
 
 *   **Objetivo:** Implementar o gerenciamento do histórico de transcrições e a funcionalidade de busca.
@@ -63,76 +65,65 @@ Este checklist permite monitorar o progresso de cada fase, garantindo que todos 
         *   [ ] Exclusão de transcrições individuais.
         *   [ ] Interface refinada para navegação no histórico.
 
-#### **Fase 3: Aperfeiçoamento UX (Duração: 1 semana)**
+---
 
-*   **Objetivo:** Refinar a experiência do usuário com melhorias visuais e de interação.
-    *   **Componentes:**
-        *   [ ] **Sistema de rolagem inteligente (RNF-07):**
-            *   [ ] Rolagem automática para baixo quando próximo ao final (20px).
-            *   [ ] Botão "Ir para o final" quando o usuário rola para cima.
-            *   [ ] Não forçar rolagem para baixo se o usuário estiver lendo mensagens antigas.
-        *   [ ] **Temas claro/escuro (RNF-08):**
-            *   [ ] Opção de alternância entre temas na interface.
-            *   [ ] Persistência da preferência do usuário.
-            *   [ ] Todos os elementos da interface respeitando o tema selecionado.
-        *   [ ] **Animações e feedback visual:**
-            *   [ ] Animações suaves para transições de interface.
-            *   [ ] Feedback visual aprimorado para ações do usuário (ex: sucesso/erro).
-        *   [ ] **Melhorias na exibição de transcrições (RF-04):**
-            *   [ ] Interface com opção de expandir/recolher a transcrição.
-            *   [ ] Paginação ou divisão em blocos para transcrições longas.
-            *   [ ] Formatação limpa sem timestamps ou marcações indesejadas.
-    *   **Marcos de Conclusão da Fase:**
-        *   [ ] Sistema de rolagem inteligente implementado.
-        *   [ ] Temas claro/escuro funcionais.
-        *   [ ] Feedback visual aprimorado durante o processamento.
-        *   [ ] Interface responsiva para diferentes dispositivos.
+#### **Nova Fase 3: Implementação do Core de Playlists e Comunicação em Tempo Real**
 
-#### **Fase 4: Playlists e Recuperação (Duração: 1 semana)**
-
-*   **Objetivo:** Adicionar suporte a playlists e garantir a recuperação de estado do sistema.
-    *   **Componentes:**
-        *   [ ] **Processamento de playlists (RF-02):**
-            *   [ ] Extração de todos os vídeos de uma URL de playlist.
-            *   [ ] Processamento sequencial dos vídeos da playlist.
-            *   [ ] Tratamento adequado de falhas individuais em playlists.
-            *   [ ] Exibição clara do status de processamento para cada vídeo da playlist.
-        *   [ ] **Recuperação de estado (RNF-14):**
-            *   [ ] Armazenamento persistente do estado da aplicação (ex: última conversa ativa).
-            *   [ ] Restauração automática do estado após reinicialização.
-            *   [ ] Preservação do histórico de transcrições.
-            *   [ ] Interface que reflete o estado recuperado corretamente.
-        *   [ ] **Tratamento robusto de erros em playlists:**
-            *   [ ] Mensagens de erro específicas para falhas em vídeos de playlist.
-            *   [ ] Mecanismo para pular vídeos com erro e continuar o processamento.
-    *   **Marcos de Conclusão da Fase:**
-        *   [ ] Processamento robusto de playlists.
-        *   [ ] Recuperação de estado após reinicialização.
-        *   [ ] Documentação completa do código.
-        *   [ ] Testes de compatibilidade concluídos.
-
-#### **Fase 5: Otimização e Testes (Duração: 0.5 semana)**
-
-*   **Objetivo:** Otimizar o desempenho, garantir a qualidade e finalizar a documentação.
-    *   **Componentes:**
-        *   [ ] **Otimização de desempenho (RNF-09):**
-            *   [ ] Uso de threads separadas para operações pesadas.
-            *   [ ] Liberação adequada de recursos após operações.
-            *   [ ] Monitoramento básico de consumo de recursos (CPU/RAM).
-            *   [ ] Limite configurável para uso de recursos em operações intensivas.
-        *   [ ] **Testes de usabilidade:**
-            *   [ ] Testes em múltiplos dispositivos e navegadores (RNF-13).
-            *   [ ] Validação da experiência do usuário com usuários reais.
-            *   [ ] Coleta de feedback e implementação de ajustes finos.
-        *   [ ] **Documentação final:**
-            *   [ ] Revisão e atualização de toda a documentação do sistema.
-            *   [ ] Criação de um guia de usuário (se aplicável).
-            *   [ ] Documentação de instalação e configuração.
-    *   **Marcos de Conclusão da Fase:**
-        *   [ ] Otimização de desempenho concluída.
-        *   [ ] Testes de usabilidade e compatibilidade finalizados.
-        *   [ ] Documentação completa e atualizada.
+* **Objetivo:** Implementar a funcionalidade central de processamento de playlists e o feedback de progresso em tempo real, que são os maiores avanços definidos na Parte 8.
+* **Componentes:**
+    * **Backend (`youtube_handler.py`, `app.py`):**
+        * [ ] Modificar `extract_video_id` e a lógica de processamento para diferenciar URLs de vídeo e de playlist.
+        * [cite_start][ ] Implementar a extração de todos os IDs de vídeo de uma URL de playlist[cite: 554].
+        * [cite_start][ ] Adaptar o `HistoryManager` para criar e gerenciar os dois tipos de objetos no `history.json` (vídeo e playlist)[cite: 550].
+        * [cite_start][ ] Integrar `Socket.IO` para emitir eventos de progresso (ex: "Iniciando playlist", "Processando vídeo 2 de 10", "Finalizado com 1 erro")[cite: 543, 555].
+        * [ ] Criar uma nova rota para lidar especificamente com o processamento de playlists ou adaptar a existente.
+    * **Frontend (`main.js`, `index.html`):**
+        * [cite_start][ ] Implementar a conexão com o `Socket.IO` para ouvir os eventos de progresso e atualizar a UI em tempo real[cite: 559, 560].
+        * [ ] Adaptar a interface do histórico (`#history-list`) para exibir ícones ou formatação diferente para vídeos e playlists.
+        * [ ] Criar a interface de visualização de uma playlist, que deve listar os vídeos contidos nela e o status de cada um (concluído, falhou, em andamento).
+* **Marcos de Conclusão da Fase:**
+    * [ ] Sistema capaz de processar uma playlist completa e salvar as transcrições individuais.
+    * [ ] Histórico exibe corretamente tanto vídeos individuais quanto playlists.
+    * [ ] Interface fornece feedback em tempo real sobre o progresso do processamento da playlist.
 
 ---
 
-Este checklist pode ser usado por cada membro da equipe para acompanhar suas tarefas e pelo gerente de projeto para ter uma visão geral do progresso. Lembre-se de atualizar o status de cada item à medida que ele é concluído.
+#### **Nova Fase 4: Refinamento da Interface e Gerenciamento Avançado**
+
+* **Objetivo:** Aprimorar a experiência do usuário com as funcionalidades de gerenciamento, download e visuais que foram detalhadas.
+* **Componentes:**
+    * **Backend:**
+        * [cite_start][ ] Implementar a lógica de download unificado para playlists: criar um arquivo ZIP em memória contendo os JSONs individuais e o TXT consolidado[cite: 536].
+        * [ ] Criar o endpoint `DELETE` para excluir uma playlist inteira (removendo a entrada do histórico e todos os JSONs associados).
+        * [cite_start][ ] Implementar a lógica de reprocessamento de falhas para vídeos dentro de uma playlist[cite: 537].
+        * [cite_start][ ] Implementar a lógica de cancelamento de um processo em andamento[cite: 538].
+    * **Frontend:**
+        * [cite_start][ ] Implementar a alternância de temas claro/escuro, persistindo a escolha no `localStorage`[cite: 542, 565].
+        * [ ] Adicionar o botão de download de ZIP na visualização de playlist.
+        * [ ] Adicionar o botão de "Reprocessar falhas" e "Cancelar" na interface da playlist.
+        * [cite_start][ ] Garantir que a interface seja totalmente responsiva em desktops, tablets e celulares[cite: 541].
+* **Marcos de Conclusão da Fase:**
+    * [ ] Download de ZIP para playlists está funcional.
+    * [ ] Exclusão, reprocessamento e cancelamento de playlists funcionam como esperado.
+    * [ ] Temas claro/escuro e responsividade completa implementados.
+
+---
+
+#### **Nova Fase 5: Otimização, Robustez e Finalização**
+
+* **Objetivo:** Garantir que o sistema seja robusto, eficiente e confiável, tratando casos extremos e otimizando o uso de recursos.
+* **Componentes:**
+    * **Backend:**
+        * [cite_start][ ] Implementar uma fila de processamento para limitar o número de transcrições simultâneas, monitorando o uso de CPU/RAM[cite: 545].
+        * [cite_start][ ] Implementar o sistema de recuperação de estado para que processos de playlist longos possam ser retomados em caso de reinicialização do servidor[cite: 547].
+        * [cite_start][ ] Implementar o limite de 3 tentativas para reprocessamento de vídeos com falha[cite: 548].
+    * **Frontend:**
+        * [ ] Exibir o status "Falha Permanente" para vídeos que atingiram o limite de reprocessamento.
+        * [cite_start][ ] Exibir mensagens de erro mais detalhadas e amigáveis, com links para um possível FAQ, conforme definido em RNF-06[cite: 546].
+    * **Geral:**
+        * [cite_start][ ] Realizar testes de usabilidade e compatibilidade nos principais navegadores (Chrome, Firefox, Edge)[cite: 449].
+        * [ ] Finalizar e revisar toda a documentação do projeto.
+* **Marcos de Conclusão da Fase:**
+    * [ ] Sistema otimizado para não sobrecarregar o servidor.
+    * [ ] Recuperação de estado e tratamento de falhas permanentes estão funcionais.
+    * [ ] Projeto testado, documentado e pronto para um lançamento estável.
