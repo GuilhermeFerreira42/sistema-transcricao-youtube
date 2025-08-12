@@ -38,7 +38,7 @@ def process_youtube_video():
     
     url = data['url']
     logger.info(f"Processando vídeo do YouTube: {url}")
-    
+  
     try:
         # Processar o vídeo
         transcript, metadata, json_path = youtube_handler.download_and_clean_transcript(url)
@@ -76,31 +76,22 @@ def download_transcription(video_id):
     """
     Rota para baixar a transcrição em TXT
     """
-    # Garantir que o diretório de transcrições exista
     transcriptions_dir = youtube_handler.output_dir
-    os.makedirs(transcriptions_dir, exist_ok=True)
     
-    # Encontrar o arquivo JSON mais recente com este video_id
-    matching_files = []
-    
-    for filename in os.listdir(transcriptions_dir):
-        if filename.startswith(video_id) and filename.endswith('.json'):
-            filepath = os.path.join(transcriptions_dir, filename)
-            matching_files.append((filepath, os.path.getctime(filepath)))
-    
-    if not matching_files:
+    # Encontrar o arquivo JSON com este video_id
+    filename = f"{video_id}.json"
+    filepath = os.path.join(transcriptions_dir, filename)
+
+    if not os.path.exists(filepath):
         logger.error(f"Nenhuma transcrição encontrada para o vídeo {video_id}")
         return jsonify({
             "success": False,
             "error": "Transcrição não encontrada"
         }), 404
     
-    # Pegar o arquivo mais recente
-    latest_file = max(matching_files, key=lambda x: x[1])[0]
-    
     try:
         # Carregar o arquivo JSON
-        with open(latest_file, 'r', encoding='utf-8') as f:
+        with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         # Criar conteúdo TXT
@@ -138,36 +129,77 @@ def download_transcription(video_id):
 @app.route('/get_transcription/<video_id>', methods=['GET'])
 def get_transcription(video_id):
     """
-    Rota para obter a transcrição completa em JSON
+    Rota para obter a transcrição completa em JSON ao clicar em um item do histórico
     """
-    # Encontrar o arquivo JSON mais recente com este video_id
     transcriptions_dir = youtube_handler.output_dir
-    matching_files = []
-    
-    for filename in os.listdir(transcriptions_dir):
-        if filename.startswith(video_id) and filename.endswith('.json'):
-            filepath = os.path.join(transcriptions_dir, filename)
-            matching_files.append((filepath, os.path.getctime(filepath)))
-    
-    if not matching_files:
-        logger.error(f"Nenhuma transcrição encontrada para o vídeo {video_id}")
-        return jsonify({
-            "success": False,
-            "error": "Transcrição não encontrada"
-        }), 404
-    
-    # Pegar o arquivo mais recente
-    latest_file = max(matching_files, key=lambda x: x[1])[0]
+    filepath = os.path.join(transcriptions_dir, f"{video_id}.json")
+
+    if not os.path.exists(filepath):
+        return jsonify({"success": False, "error": "Transcrição não encontrada"}), 404
     
     try:
-        # Enviar o arquivo JSON
-        return send_file(latest_file, mimetype='application/json')
+        # Envia o arquivo JSON
+        return send_file(filepath, mimetype='application/json')
     except Exception as e:
         logger.exception(f"Erro ao enviar transcrição para {video_id}: {str(e)}")
         return jsonify({
             "success": False,
             "error": f"Erro ao enviar transcrição: {str(e)}"
         }), 500
+
+# --- NOVAS ROTAS ADICIONADAS ---
+
+@app.route('/get_history', methods=['GET'])
+def get_history():
+    """
+    NOVA ROTA: Retorna o histórico de transcrições do arquivo history.json.
+    """
+    try:
+        history_data = youtube_handler.history_manager.get_history()
+        return jsonify({
+            "success": True,
+            "history": history_data
+        })
+    except Exception as e:
+        logger.exception(f"Erro ao obter o histórico: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": f"Erro interno ao obter o histórico: {str(e)}"
+        }), 500
+
+@app.route('/delete_transcription/<video_id>', methods=['DELETE'])
+def delete_transcription_route(video_id):
+    """
+    NOVA ROTA: Exclui uma transcrição do histórico e o arquivo JSON associado.
+    """
+    if not video_id:
+        return jsonify({"success": False, "error": "ID do vídeo não fornecido"}), 400
+
+    try:
+        # Remove a entrada do history.json e obtém o nome do arquivo a ser deletado
+        json_filename_to_delete = youtube_handler.history_manager.remove_entry(video_id)
+
+        if json_filename_to_delete:
+            # Monta o caminho completo para o arquivo JSON
+            filepath_to_delete = os.path.join(youtube_handler.output_dir, json_filename_to_delete)
+            
+            # Tenta deletar o arquivo físico
+            if os.path.exists(filepath_to_delete):
+                os.remove(filepath_to_delete)
+                logger.info(f"Arquivo de transcrição {filepath_to_delete} deletado com sucesso.")
+            else:
+                logger.warning(f"Arquivo {filepath_to_delete} não encontrado para exclusão, mas a entrada do histórico foi removida.")
+        
+        return jsonify({"success": True, "message": "Transcrição removida com sucesso."})
+
+    except Exception as e:
+        logger.exception(f"Erro ao deletar a transcrição para {video_id}: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": f"Erro interno ao deletar a transcrição: {str(e)}"
+        }), 500
+
+# --------------------------------
 
 if __name__ == '__main__':
     # Certifique-se de que o diretório de transcrições existe
