@@ -6,6 +6,8 @@
     --border-color: #ddd;
     --success-color: #28a745;
     --error-color: #dc3545;
+    --sidebar-bg: #fdfdfd;
+    --sidebar-width: 320px;
 }
 
 * {
@@ -19,12 +21,115 @@ body {
     line-height: 1.6;
     color: var(--text-color);
     background-color: #fff;
+    overflow: hidden; /* NOVO: Impede o scroll no body */
 }
 
+.main-layout {
+    display: flex;
+    height: 100vh;
+    width: 100vw; /* NOVO: Ocupa a largura toda */
+}
+
+.sidebar {
+    width: var(--sidebar-width);
+    flex-shrink: 0; /* NOVO: Impede que a sidebar encolha */
+    background-color: var(--sidebar-bg);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.sidebar-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-search {
+    padding: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#search-history {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.history-list {
+    list-style: none;
+    padding: 0;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.history-item {
+    padding: 15px 20px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.2s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.history-item-empty {
+    padding: 20px;
+    color: #888;
+    text-align: center;
+}
+
+.history-item:hover {
+    background-color: #f0f0f0;
+}
+
+.history-item.active {
+    background-color: #e6e6e6;
+    font-weight: bold;
+}
+
+.history-item-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+}
+
+.delete-history-btn {
+    background: none;
+    border: none;
+    color: #999;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 5px;
+    display: none;
+}
+
+.history-item:hover .delete-history-btn {
+    display: block;
+}
+
+.delete-history-btn:hover {
+    color: var(--error-color);
+}
+
+/* MODIFICADO: Correção do container principal */
 .container {
+    flex: 1; /* Faz o container ocupar o espaço restante */
+    min-width: 0; /* Correção de bug do flexbox para evitar overflow */
+    padding: 20px;
+    overflow-y: auto; /* Permite scroll vertical apenas nesta área */
+    display: flex;
+    flex-direction: column;
+}
+
+/* NOVO: Wrapper para o conteúdo interno para manter a largura máxima */
+.content-wrapper {
+    width: 100%;
     max-width: 1200px;
     margin: 0 auto;
-    padding: 20px;
 }
 
 header {
@@ -82,7 +187,7 @@ header h1 {
 }
 
 .status-message {
-    margin-top: 10px;
+    margin-top: 15px;
     padding: 10px;
     border-radius: 4px;
     display: none;
@@ -124,6 +229,7 @@ header h1 {
     justify-content: center;
     padding: 20px;
     color: #666;
+    font-size: 18px;
 }
 
 .spinner {
@@ -188,4 +294,70 @@ footer {
     padding: 20px 0;
     color: #666;
     border-top: 1px solid var(--border-color);
+}
+
+.modal {
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    text-align: center;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.modal-content h3 {
+    margin-bottom: 15px;
+    font-size: 22px;
+}
+
+.modal-content p {
+    margin-bottom: 25px;
+    font-size: 16px;
+    color: #555;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+.modal-btn-cancel,
+.modal-btn-confirm {
+    border: none;
+    padding: 12px 25px;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.modal-btn-cancel {
+    background-color: #eee;
+    color: #333;
+}
+.modal-btn-cancel:hover {
+    background-color: #ddd;
+}
+.modal-btn-confirm {
+    background-color: var(--error-color);
+    color: white;
+}
+.modal-btn-confirm:hover {
+    background-color: #b02a37;
 }

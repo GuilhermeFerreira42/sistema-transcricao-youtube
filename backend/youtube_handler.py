@@ -25,18 +25,79 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
+# NOVO: Classe para gerenciar o índice do histórico
+class HistoryManager:
+    """Gerencia o arquivo de índice do histórico (history.json)."""
+    def __init__(self, history_path):
+        self.history_path = history_path
+        self.history_data = self._load_history()
+
+    def _load_history(self) -> List[Dict[str, Any]]:
+        """Carrega o arquivo de histórico ou cria um novo se não existir."""
+        if not os.path.exists(self.history_path):
+            return []
+        try:
+            with open(self.history_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError):
+            return []
+
+    def _save_history(self):
+        """Salva os dados do histórico no arquivo JSON."""
+        with open(self.history_path, 'w', encoding='utf-8') as f:
+            json.dump(self.history_data, f, ensure_ascii=False, indent=2)
+
+    def add_entry(self, video_id: str, title: str, json_path: str):
+        """Adiciona uma nova entrada ao histórico."""
+        entry = {
+            "video_id": video_id,
+            "title": title,
+            "json_path": os.path.basename(json_path), # Salva apenas o nome do arquivo
+            "created_at": datetime.now().isoformat()
+        }
+        # Adiciona a entrada mais recente no topo da lista
+        self.history_data.insert(0, entry)
+        self._save_history()
+        logger.info(f"Entrada adicionada ao histórico para o vídeo: {video_id}")
+
+    def remove_entry(self, video_id: str) -> Optional[str]:
+        """Remove uma entrada do histórico e retorna o caminho do arquivo JSON a ser deletado."""
+        entry_to_remove = next((entry for entry in self.history_data if entry['video_id'] == video_id), None)
+        
+        if entry_to_remove:
+            self.history_data.remove(entry_to_remove)
+            self._save_history()
+            logger.info(f"Entrada removida do histórico para o vídeo: {video_id}")
+            return entry_to_remove.get('json_path')
+        return None
+
+    def get_history(self) -> List[Dict[str, Any]]:
+        """Retorna todos os dados do histórico."""
+        return self.history_data
+
 class YouTubeHandler:
     """Classe responsável por todas as operações relacionadas ao YouTube."""
     
-    def __init__(self, output_dir="data/transcriptions"):
+    # MODIFICADO: A função __init__ agora calcula o caminho absoluto
+    def __init__(self):
         """
-        Inicializa o handler com diretório de saída para armazenar transcrições
+        Inicializa o handler com diretório de saída para armazenar transcrições.
+        Calcula o caminho absoluto para a pasta 'data' para evitar erros.
         """
-        self.output_dir = os.path.normpath(output_dir)
+        # Caminho para o diretório atual do script (backend)
+        backend_dir = os.path.dirname(os.path.abspath(__file__))
+        # Caminho para o diretório raiz do projeto (um nível acima do backend)
+        project_root = os.path.dirname(backend_dir)
+        # Caminho para o diretório de transcrições
+        output_dir_path = os.path.join(project_root, 'data', 'transcriptions')
+
+        self.output_dir = os.path.normpath(output_dir_path)
         os.makedirs(self.output_dir, exist_ok=True)
         logger.info(f"Diretório de transcrições configurado: {self.output_dir}")
+        
         self.headers = self._get_realistic_headers()
-    
+        self.history_manager = HistoryManager(os.path.join(self.output_dir, 'history.json'))
+
     def _get_realistic_headers(self) -> Dict[str, str]:
         """Gera headers HTTP que imitam um navegador real para evitar bloqueios"""
         user_agents = [
@@ -189,21 +250,14 @@ class YouTubeHandler:
         try:
             data = json.loads(raw_subtitles)
             if 'events' in data:
-                transcript_parts = []
-                for event in data['events']:
-                    if 'segs' in event:
-                        for seg in event['segs']:
-                            if 'utf8' in seg:
-                                transcript_parts.append(seg['utf8'])
-                
+                transcript_parts = [seg['utf8'] for event in data['events'] if 'segs' in event for seg in event['segs'] if 'utf8' in seg]
                 full_transcript = "".join(transcript_parts).replace('\n', ' ').strip()
                 cleaned = re.sub(r'\s{2,}', ' ', full_transcript)
                 logger.info("Transcrição limpa a partir do formato JSON.")
                 return cleaned
         except (json.JSONDecodeError, TypeError):
             logger.info("Formato não é JSON, limpando como VTT/SRT.")
-            pass
-
+        
         cleaned = re.sub(r'WEBVTT.*\n', '', raw_subtitles)
         cleaned = re.sub(r'\d{2}:\d{2}:\d{2}[,.]\d{3} --> \d{2}:\d{2}:\d{2}[,.]\d{3}.*\n', '', cleaned)
         cleaned = re.sub(r'<\d{2}:\d{2}:\d{2}[,.]\d{3}>', '', cleaned)
@@ -219,11 +273,7 @@ class YouTubeHandler:
     def split_transcript_into_chunks(self, transcript: str, words_per_chunk: int = 300) -> List[str]:
         """Divide a transcrição em blocos menores."""
         words = transcript.split()
-        chunks = []
-        for i in range(0, len(words), words_per_chunk):
-            chunk = ' '.join(words[i:i + words_per_chunk])
-            chunks.append(chunk)
-        return chunks
+        return [' '.join(words[i:i + words_per_chunk]) for i in range(0, len(words), words_per_chunk)]
 
     def sanitize_filename(self, filename: str) -> str:
         """Sanitiza o nome do arquivo para evitar caracteres inválidos."""
@@ -233,7 +283,7 @@ class YouTubeHandler:
 
     def save_transcription_to_json(self, video_id: str, title: str, transcript: str, 
                                  chunks: List[str], metadata: Dict) -> str:
-        """Salva a transcrição em um arquivo JSON."""
+        """Salva a transcrição em um arquivo JSON e atualiza o histórico."""
         transcription_id = str(uuid.uuid4())
         data = {
             "transcription_id": transcription_id,
@@ -246,14 +296,17 @@ class YouTubeHandler:
             "format_version": "2.0"
         }
         
-        safe_title = self.sanitize_filename(title)
-        filename = f"{video_id}_{safe_title[:50]}_{transcription_id[:8]}.json"
+        filename = f"{video_id}.json"
         filepath = os.path.join(self.output_dir, filename)
         
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         
         logger.info(f"Transcrição salva em: {filepath}")
+
+        # NOVO: Adiciona a entrada ao histórico
+        self.history_manager.add_entry(video_id, title, filepath)
+
         return filepath
 
     def download_and_clean_transcript(self, url: str) -> Tuple[Optional[str], Dict, Optional[str]]:
@@ -262,6 +315,7 @@ class YouTubeHandler:
             logger.error(f"URL inválida: {url}")
             return None, {}, None
 
+        # MODIFICADO: Usa a função de extração da própria classe
         video_id = self.extract_video_id(url)
         if not video_id:
             logger.error(f"ID do vídeo não encontrado na URL: {url}")
@@ -283,8 +337,9 @@ class YouTubeHandler:
             logger.info(f"Transcrição obtida com sucesso via 'youtube-transcript-api' para {video_id}")
 
             chunks = self.split_transcript_into_chunks(cleaned_transcript)
+            # MODIFICADO: Usa o video_id extraído consistentemente
             json_path = self.save_transcription_to_json(
-                metadata['video_id'], metadata['title'], cleaned_transcript, chunks, metadata
+                video_id, metadata['title'], cleaned_transcript, chunks, metadata
             )
             return cleaned_transcript, metadata, json_path
 
@@ -306,10 +361,10 @@ class YouTubeHandler:
         if not cleaned_transcript.strip() or "Erro: O Google bloqueou" in cleaned_transcript:
             logger.error(f"A transcrição limpa está vazia ou bloqueada para o vídeo: {url}")
             return None, metadata, None
-            
+        
         chunks = self.split_transcript_into_chunks(cleaned_transcript)
         json_path = self.save_transcription_to_json(
-            metadata['video_id'], metadata['title'], cleaned_transcript, chunks, metadata
+            video_id, metadata['title'], cleaned_transcript, chunks, metadata
         )
         
         return cleaned_transcript, metadata, json_path
