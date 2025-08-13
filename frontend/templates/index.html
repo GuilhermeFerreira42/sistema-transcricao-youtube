@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Transcrição e Download YouTube</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -16,30 +17,39 @@
                 <input type="text" id="search-history" placeholder="Buscar no histórico...">
             </div>
             <ul id="history-list" class="history-list">
-            </ul>
+                </ul>
         </aside>
 
         <div class="container">
             <div class="content-wrapper">
                 <header>
                     <h1>Sistema de Transcrição e Download YouTube</h1>
-                    <p>Transforme conteúdo audiovisual em texto editável e pesquisável</p>
+                    <p>Transforme vídeos e playlists do YouTube em texto pesquisável.</p>
                 </header>
                 
                 <main>
                     <section class="input-section">
-                        <h2>Insira a URL do vídeo do YouTube</h2>
+                        <h2>Insira a URL do vídeo ou playlist</h2>
                         <div class="input-group">
-                            <input type="text" id="youtube-url" placeholder="https://www.youtube.com/watch?v=...">
-                            <button id="process-btn">Processar Vídeo</button>
+                            <input type="text" id="youtube-url" placeholder="https://www.youtube.com/watch?v=... ou /playlist?list=...">
+                            <button id="process-btn">Processar</button>
                         </div>
                         <div id="status-message" class="status-message"></div>
                     </section>
                     
                     <div id="processing-indicator" class="processing-indicator" style="display: none;">
                         <div class="spinner"></div>
-                        <span>Processando...</span>
+                        <span id="processing-indicator-text">Processando...</span>
                     </div>
+
+                    <section id="playlist-progress-section" class="playlist-progress" style="display: none;">
+                        <h2 id="playlist-progress-title"></h2>
+                        <div class="progress-bar-container">
+                            <div id="playlist-progress-bar" class="progress-bar"></div>
+                        </div>
+                        <p id="playlist-progress-status"></p>
+                        <ul id="playlist-video-list" class="playlist-video-list"></ul>
+                    </section>
 
                     <div id="main-content" style="display: none;">
                         <section id="video-info" class="video-info">
@@ -53,11 +63,7 @@
                             <div class="transcription-header">
                                 <h2>Transcrição Completa</h2>
                                 <button id="download-btn" class="download-btn">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                        <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-                                        <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
-                                    </svg>
-                                    Baixar TXT
+                                     <i class="fas fa-download"></i> Baixar TXT
                                 </button>
                             </div>
                             <div id="transcription-content" class="transcription-content"></div>
@@ -75,7 +81,7 @@
     <div id="delete-modal" class="modal" style="display: none;">
         <div class="modal-content">
             <h3>Confirmar Exclusão</h3>
-            <p>Você tem certeza de que deseja excluir esta transcrição? Esta ação não pode ser desfeita.</p>
+            <p>Você tem certeza de que deseja excluir este item? Esta ação não pode ser desfeita.</p>
             <div class="modal-actions">
                 <button id="modal-cancel-btn" class="modal-btn-cancel">Cancelar</button>
                 <button id="modal-confirm-btn" class="modal-btn-confirm">Excluir</button>
@@ -83,6 +89,7 @@
         </div>
     </div>
     
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="/static/js/main.js"></script>
 </body>
 </html>

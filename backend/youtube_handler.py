@@ -11,9 +11,6 @@ import random
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 
-# ==============================================================================
-# NOVA IMPORTAÇÃO: Adicionamos a biblioteca especializada em transcrições
-# ==============================================================================
 from youtube_transcript_api import YouTubeTranscriptApi
 
 
@@ -47,27 +44,28 @@ class HistoryManager:
         with open(self.history_path, 'w', encoding='utf-8') as f:
             json.dump(self.history_data, f, ensure_ascii=False, indent=2)
 
-    def add_entry(self, video_id: str, title: str, json_path: str):
-        """Adiciona uma nova entrada ao histórico."""
-        entry = {
-            "video_id": video_id,
-            "title": title,
-            "json_path": os.path.basename(json_path), # Salva apenas o nome do arquivo
-            "created_at": datetime.now().isoformat()
-        }
-        # Adiciona a entrada mais recente no topo da lista
-        self.history_data.insert(0, entry)
-        self._save_history()
-        logger.info(f"Entrada adicionada ao histórico para o vídeo: {video_id}")
+    # --- MODIFICADO: Adaptado para aceitar diferentes tipos de entrada ---
+    def add_entry(self, entry_data: Dict[str, Any]):
+        """Adiciona uma nova entrada (vídeo ou playlist) ao histórico."""
+        # Garante que a entrada tenha os campos essenciais
+        required_keys = ['id', 'title', 'type', 'created_at']
+        if not all(key in entry_data for key in required_keys):
+            logger.error(f"Tentativa de adicionar entrada de histórico inválida: {entry_data}")
+            return
 
-    def remove_entry(self, video_id: str) -> Optional[str]:
-        """Remove uma entrada do histórico e retorna o caminho do arquivo JSON a ser deletado."""
-        entry_to_remove = next((entry for entry in self.history_data if entry['video_id'] == video_id), None)
+        self.history_data.insert(0, entry_data)
+        self._save_history()
+        logger.info(f"Entrada do tipo '{entry_data['type']}' adicionada ao histórico: {entry_data['id']}")
+
+    def remove_entry(self, entry_id: str) -> Optional[str]:
+        """Remove uma entrada do histórico e retorna o nome do arquivo JSON a ser deletado."""
+        entry_to_remove = next((entry for entry in self.history_data if entry['id'] == entry_id), None)
         
         if entry_to_remove:
             self.history_data.remove(entry_to_remove)
             self._save_history()
-            logger.info(f"Entrada removida do histórico para o vídeo: {video_id}")
+            logger.info(f"Entrada removida do histórico para o ID: {entry_id}")
+            # Retorna o json_path apenas se for um vídeo
             return entry_to_remove.get('json_path')
         return None
 
@@ -97,6 +95,39 @@ class YouTubeHandler:
         
         self.headers = self._get_realistic_headers()
         self.history_manager = HistoryManager(os.path.join(self.output_dir, 'history.json'))
+
+    # --- NOVO: Função para extrair informações de playlists ---
+    def get_playlist_info(self, url: str) -> Optional[Dict[str, Any]]:
+        """Extrai informações de uma playlist, incluindo os vídeos contidos."""
+        logger.info(f"Extraindo informações da playlist: {url}")
+        ydl_opts = {
+            'extract_flat': 'in_playlist', # Extrai informações dos vídeos sem processá-los
+            'quiet': True,
+            'no_warnings': True,
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                if info and 'entries' in info:
+                    playlist_info = {
+                        'id': info.get('id'),
+                        'title': info.get('title', 'Playlist sem título'),
+                        'uploader': info.get('uploader'),
+                        'type': 'playlist',
+                        'videos': []
+                    }
+                    for video_entry in info['entries']:
+                        if video_entry:
+                            playlist_info['videos'].append({
+                                'id': video_entry.get('id'),
+                                'title': video_entry.get('title'),
+                                'url': video_entry.get('url'),
+                            })
+                    return playlist_info
+        except Exception as e:
+            logger.error(f"Erro ao extrair informações da playlist {url}: {e}")
+            return None
+        return None
 
     def _get_realistic_headers(self) -> Dict[str, str]:
         """Gera headers HTTP que imitam um navegador real para evitar bloqueios"""
@@ -281,6 +312,7 @@ class YouTubeHandler:
         sanitized = re.sub(r'\s+', '_', sanitized)
         return sanitized[:200]
 
+    # --- MODIFICADO: A função save_transcription_to_json agora chama o novo add_entry ---
     def save_transcription_to_json(self, video_id: str, title: str, transcript: str, 
                                  chunks: List[str], metadata: Dict) -> str:
         """Salva a transcrição em um arquivo JSON e atualiza o histórico."""
@@ -304,8 +336,15 @@ class YouTubeHandler:
         
         logger.info(f"Transcrição salva em: {filepath}")
 
-        # NOVO: Adiciona a entrada ao histórico
-        self.history_manager.add_entry(video_id, title, filepath)
+        # Cria a entrada para o histórico
+        history_entry = {
+            "id": video_id,
+            "type": "video",
+            "title": title,
+            "json_path": os.path.basename(filepath),
+            "created_at": data["created_at"]
+        }
+        self.history_manager.add_entry(history_entry)
 
         return filepath
 
