@@ -173,6 +173,36 @@ def process_playlist_task(url: str):
         'error_count': error_count
     })
 
+# --- NOVA ROTA: Obter detalhes de uma playlist ---
+@app.route('/get_playlist_details/<playlist_id>', methods=['GET'])
+def get_playlist_details(playlist_id):
+    """Retorna os detalhes de uma playlist e o status de cada vídeo."""
+    details = youtube_handler.get_playlist_details(playlist_id)
+    if not details:
+        return jsonify({"success": False, "error": "Playlist não encontrada"}), 404
+    return jsonify({"success": True, "details": details})
+
+
+# --- NOVA ROTA: Download de ZIP da playlist ---
+@app.route('/download_playlist/<playlist_id>', methods=['GET'])
+def download_playlist(playlist_id):
+    """Cria e envia um arquivo ZIP com as transcrições da playlist."""
+    try:
+        zip_buffer, zip_filename = youtube_handler.create_playlist_zip(playlist_id)
+        if not zip_buffer:
+            return jsonify({"success": False, "error": "Não foi possível gerar o arquivo ZIP."}), 404
+            
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=zip_filename
+        )
+    except Exception as e:
+        logger.exception(f"Erro ao gerar ZIP para playlist {playlist_id}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/download_transcription/<video_id>', methods=['GET'])
 def download_transcription(video_id):
     """

@@ -1,4 +1,4 @@
-// frontend/static/js/main.js (Corrigido e Atualizado para Fase 3)
+// frontend/static/js/main.js (Reestruturado para Playlists)
 document.addEventListener('DOMContentLoaded', function() {
     // --- Conexão com o Socket.IO ---
     const socket = io();
@@ -17,6 +17,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const playlistProgressBar = document.getElementById('playlist-progress-bar');
     const playlistProgressStatus = document.getElementById('playlist-progress-status');
     const playlistVideoList = document.getElementById('playlist-video-list');
+
+    // --- NOVO: Seletores da visualização de playlist ---
+    const playlistViewSection = document.getElementById('playlist-view-section');
+    const playlistViewTitle = document.getElementById('playlist-view-title');
+    const playlistViewVideoList = document.getElementById('playlist-view-video-list');
+    const downloadPlaylistZipBtn = document.getElementById('download-playlist-zip-btn');
 
     const videoInfoSection = document.getElementById('video-info');
     const videoThumbnail = document.getElementById('video-thumbnail');
@@ -50,13 +56,12 @@ document.addEventListener('DOMContentLoaded', function() {
         statusMessage.style.display = 'none';
     }
 
-    // --- CORREÇÃO: Função de validação de URL para aceitar vídeos e playlists ---
     function isValidYoutubeUrl(url) {
         const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/(watch\?v=[\w-]+|playlist\?list=[\w-]+|[\w-]+)/;
         return youtubeRegex.test(url);
     }
 
-    // --- Lógica de Histórico ---
+    // --- Lógica de Histórico (MODIFICADA) ---
 
     function addHistoryItemToDOM(item, prepend = false) {
         const emptyState = historyList.querySelector('.history-item-empty');
@@ -74,14 +79,16 @@ document.addEventListener('DOMContentLoaded', function() {
         li.innerHTML = `
             <span class="history-item-icon">${icon}</span>
             <span class="history-item-title" title="${item.title}">${item.title}</span>
-            <button class="delete-history-btn" data-id="${item.id}" title="Excluir item">&times;</button>
+            <button class="delete-history-btn" data-id="${item.id}" title="Excluir item">×</button>
         `;
 
-        li.querySelector('.history-item-title').addEventListener('click', () => {
+        // MODIFICADO: Evento de clique no item inteiro
+        li.addEventListener('click', () => {
             if (item.type === 'video') {
                 loadTranscription(item.id);
+            } else if (item.type === 'playlist') {
+                loadPlaylistView(item.id);
             }
-            // Futuramente, adicionar lógica para visualizar playlists
             setActiveHistoryItem(item.id);
         });
 
@@ -133,9 +140,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // --- Lógica de Processamento (Corrigida) ---
+    // --- Lógica de Processamento ---
 
-    // --- CORREÇÃO: Função unificada para processar URL, apontando para a rota correta `/process_url` ---
     async function processUrl() {
         const url = youtubeUrlInput.value.trim();
         if (!isValidYoutubeUrl(url)) {
@@ -150,14 +156,12 @@ document.addEventListener('DOMContentLoaded', function() {
         processBtn.disabled = true;
 
         try {
-            // --- CORREÇÃO: A requisição agora é enviada para `/process_url` ---
             const response = await fetch('/process_url', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url })
             });
 
-            // O erro `SyntaxError` acontecia aqui, pois a resposta era um HTML de erro 404.
             const data = await response.json();
 
             if (data.success) {
@@ -174,12 +178,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // --- Lógica de Visualização (MODIFICADA) ---
+
     async function loadTranscription(videoId) {
         hideStatus();
         hideAllViews();
         processingIndicator.style.display = 'flex';
         processingIndicatorText.textContent = 'Carregando transcrição...';
-        
         try {
             const response = await fetch(`/get_transcription/${videoId}`);
             const data = await response.json();
@@ -199,6 +204,59 @@ document.addEventListener('DOMContentLoaded', function() {
             processingIndicator.style.display = 'none';
         }
     }
+    
+    // --- NOVA FUNÇÃO: Carregar a visualização da playlist ---
+    async function loadPlaylistView(playlistId) {
+        hideStatus();
+        hideAllViews();
+        processingIndicator.style.display = 'flex';
+        processingIndicatorText.textContent = 'Carregando detalhes da playlist...';
+        
+        try {
+            const response = await fetch(`/get_playlist_details/${playlistId}`);
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error);
+
+            const details = data.details;
+            playlistViewTitle.textContent = `Vídeos em: ${details.title}`;
+            playlistViewVideoList.innerHTML = ''; // Limpa a lista anterior
+
+            if (details.videos.length > 0) {
+                details.videos.forEach(video => {
+                    const li = document.createElement('li');
+                    li.className = 'playlist-video-item';
+                    const iconClass = video.status === 'success' ? 'fas fa-check-circle success' : 'fas fa-times-circle error';
+                    li.innerHTML = `
+                        <span class="icon"><i class="${iconClass}"></i></span>
+                        <span class="playlist-video-title">${video.title}</span>
+                    `;
+                    // Adiciona um evento de clique para carregar a transcrição do vídeo individual
+                    li.addEventListener('click', () => {
+                        if (video.status === 'success') {
+                            loadTranscription(video.id);
+                            setActiveHistoryItem(playlistId); // Manter a playlist ativa
+                        }
+                    });
+                    playlistViewVideoList.appendChild(li);
+                });
+            } else {
+                playlistViewVideoList.innerHTML = '<li class="history-item-empty">Nenhum vídeo nesta playlist.</li>';
+            }
+            
+            downloadPlaylistZipBtn.onclick = () => {
+                window.location.href = `/download_playlist/${playlistId}`;
+            };
+
+            playlistViewSection.style.display = 'block';
+
+        } catch (error) {
+            console.error('Erro ao carregar detalhes da playlist:', error);
+            showStatus(`Erro: ${error.message}`, 'error');
+        } finally {
+            processingIndicator.style.display = 'none';
+        }
+    }
+
 
     function updateUIWithTranscription(data) {
         hideAllViews();
@@ -209,7 +267,7 @@ document.addEventListener('DOMContentLoaded', function() {
         mainContent.style.display = 'block';
     }
 
-    // --- Lógica de Exclusão (Corrigida) ---
+    // --- Lógica de Exclusão ---
     
     function openDeleteModal(id) {
         itemToDelete = id;
@@ -221,7 +279,6 @@ document.addEventListener('DOMContentLoaded', function() {
         deleteModal.style.display = 'none';
     }
 
-    // --- CORREÇÃO: Lógica de exclusão revisada para garantir a remoção da UI ---
     async function confirmDelete() {
         if (!itemToDelete) return;
 
@@ -236,12 +293,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     itemToRemove.remove();
                 }
 
-                // Verifica se a lista de histórico ficou vazia
                 if (historyList.children.length === 0) {
                      historyList.innerHTML = '<li class="history-item-empty">Nenhum histórico.</li>';
                 }
 
-                // Limpa a tela principal se o item ativo foi excluído
                 const activeItem = document.querySelector('.history-item.active');
                 if (!activeItem || (activeItem && activeItem.dataset.id === itemToDelete)) {
                     hideAllViews();
@@ -294,6 +349,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 videoItem.querySelector('.icon').className = 'icon processing';
             }
             playlistProgressStatus.textContent = data.message;
+            // Atualiza a barra de progresso
+            const progressPercentage = (data.current_video / data.total_videos) * 100;
+            playlistProgressBar.style.width = `${progressPercentage}%`;
+
         } else {
             hideAllViews();
             processingIndicator.style.display = 'flex';
@@ -315,10 +374,13 @@ document.addEventListener('DOMContentLoaded', function() {
             processBtn.disabled = false;
         }
         
-        const existingItem = historyList.querySelector(`[data-id="${data.video_id}"]`);
-        if (!existingItem) {
-            addHistoryItemToDOM({ id: data.video_id, title: data.title, type: 'video' }, true);
-            setActiveHistoryItem(data.video_id);
+        // Adiciona apenas vídeos individuais ao histórico em tempo real
+        if (!data.playlist_id) {
+            const existingItem = historyList.querySelector(`[data-id="${data.video_id}"]`);
+            if (!existingItem) {
+                addHistoryItemToDOM({ id: data.video_id, title: data.title, type: 'video' }, true);
+                setActiveHistoryItem(data.video_id);
+            }
         }
     });
 
@@ -341,13 +403,14 @@ document.addEventListener('DOMContentLoaded', function() {
         playlistProgressStatus.textContent = `Concluído! ${data.processed_count} vídeos processados, ${data.error_count} falhas.`;
         playlistProgressBar.style.width = '100%';
         processBtn.disabled = false;
-        loadHistory(); 
+        loadHistory(); // Recarrega o histórico para adicionar o item da playlist
     });
 
     function hideAllViews() {
         mainContent.style.display = 'none';
         processingIndicator.style.display = 'none';
         playlistProgressSection.style.display = 'none';
+        playlistViewSection.style.display = 'none'; // Garante que a nova view seja escondida
     }
 
     // --- Event Listeners ---

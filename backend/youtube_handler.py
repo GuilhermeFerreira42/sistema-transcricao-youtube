@@ -10,6 +10,8 @@ import time
 import random
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
+from io import BytesIO
+import zipfile
 
 from youtube_transcript_api import YouTubeTranscriptApi
 
@@ -128,6 +130,76 @@ class YouTubeHandler:
             logger.error(f"Erro ao extrair informações da playlist {url}: {e}")
             return None
         return None
+    
+    # --- NOVO: Função para obter detalhes de uma playlist do histórico ---
+    def get_playlist_details(self, playlist_id: str) -> Optional[Dict[str, Any]]:
+        """Obtém os detalhes de uma playlist e o status de cada vídeo nela."""
+        playlist_entry = next((p for p in self.history_manager.get_history() if p['id'] == playlist_id and p['type'] == 'playlist'), None)
+        if not playlist_entry:
+            return None
+
+        videos_details = []
+        for video_id in playlist_entry.get('video_ids', []):
+            video_filepath = os.path.join(self.output_dir, f"{video_id}.json")
+            if os.path.exists(video_filepath):
+                try:
+                    with open(video_filepath, 'r', encoding='utf-8') as f:
+                        video_data = json.load(f)
+                        videos_details.append({
+                            'id': video_id,
+                            'title': video_data.get('title', 'Título desconhecido'),
+                            'status': 'success'
+                        })
+                except Exception as e:
+                    logger.error(f"Erro ao ler o arquivo JSON do vídeo {video_id}: {e}")
+                    videos_details.append({'id': video_id, 'title': 'Erro ao ler dados', 'status': 'error'})
+            else:
+                # Se o arquivo JSON não existe, o vídeo falhou no processamento
+                videos_details.append({'id': video_id, 'title': f'Vídeo {video_id}', 'status': 'error'})
+        
+        playlist_details = {
+            "id": playlist_entry['id'],
+            "title": playlist_entry['title'],
+            "videos": videos_details
+        }
+        return playlist_details
+
+    # --- NOVO: Função para criar um arquivo ZIP com as transcrições da playlist ---
+    def create_playlist_zip(self, playlist_id: str) -> Optional[Tuple[BytesIO, str]]:
+        """Cria um arquivo ZIP em memória com todas as transcrições de uma playlist."""
+        playlist_details = self.get_playlist_details(playlist_id)
+        if not playlist_details:
+            return None
+
+        zip_buffer = BytesIO()
+        consolidated_txt_content = f"Transcrição consolidada da playlist: {playlist_details['title']}\n\n"
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for video in playlist_details.get('videos', []):
+                if video['status'] == 'success':
+                    json_filename = f"{video['id']}.json"
+                    json_filepath = os.path.join(self.output_dir, json_filename)
+                    if os.path.exists(json_filepath):
+                        # Adiciona o arquivo JSON individual ao ZIP
+                        zip_file.write(json_filepath, arcname=json_filename)
+                        
+                        # Adiciona o conteúdo ao TXT consolidado
+                        with open(json_filepath, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                            consolidated_txt_content += "="*80 + "\n"
+                            consolidated_txt_content += f"VÍDEO: {data['title']}\n"
+                            consolidated_txt_content += f"ID: {data['video_id']}\n"
+                            consolidated_txt_content += "="*80 + "\n\n"
+                            consolidated_txt_content += data.get('transcript', '') + "\n\n"
+
+            # Adiciona o arquivo TXT consolidado ao ZIP
+            zip_file.writestr('transcricao_consolidada.txt', consolidated_txt_content.encode('utf-8'))
+
+        zip_buffer.seek(0)
+        safe_playlist_title = self.sanitize_filename(playlist_details['title'])
+        zip_filename = f"{safe_playlist_title[:50]}_transcricoes.zip"
+        
+        return zip_buffer, zip_filename
 
     def _get_realistic_headers(self) -> Dict[str, str]:
         """Gera headers HTTP que imitam um navegador real para evitar bloqueios"""
@@ -314,7 +386,7 @@ class YouTubeHandler:
 
     # --- MODIFICADO: A função save_transcription_to_json agora chama o novo add_entry ---
     def save_transcription_to_json(self, video_id: str, title: str, transcript: str, 
-                                 chunks: List[str], metadata: Dict) -> str:
+                                   chunks: List[str], metadata: Dict) -> str:
         """Salva a transcrição em um arquivo JSON e atualiza o histórico."""
         transcription_id = str(uuid.uuid4())
         data = {
