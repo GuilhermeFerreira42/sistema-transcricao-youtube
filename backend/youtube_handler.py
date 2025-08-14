@@ -24,32 +24,66 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-# NOVO: Classe para gerenciar o índice do histórico
+# MODIFICADO: Classe HistoryManager com lógica de sincronização e exclusão em cascata
 class HistoryManager:
-    """Gerencia o arquivo de índice do histórico (history.json)."""
-    def __init__(self, history_path):
+    """Gerencia o arquivo de índice do histórico (history.json) com validação de arquivos."""
+    def __init__(self, history_path, transcriptions_dir):
         self.history_path = history_path
-        self.history_data = self._load_history()
+        self.transcriptions_dir = transcriptions_dir
+        self.history_data = self._load_and_sync_history()
 
-    def _load_history(self) -> List[Dict[str, Any]]:
-        """Carrega o arquivo de histórico ou cria um novo se não existir."""
+    def _load_and_sync_history(self) -> List[Dict[str, Any]]:
+        """Carrega o histórico e o sincroniza com os arquivos físicos existentes."""
         if not os.path.exists(self.history_path):
             return []
+        
         try:
             with open(self.history_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                history = json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
             return []
+
+        synced_history = []
+        history_changed = False
+        for entry in history:
+            entry_id = entry.get('id') or entry.get('video_id')
+            if not entry_id:
+                history_changed = True
+                continue
+
+            # Garante a padronização para 'id'
+            if 'video_id' in entry and 'id' not in entry:
+                entry['id'] = entry['video_id']
+                del entry['video_id']
+                history_changed = True
+
+            # Verifica se os arquivos físicos existem
+            if entry.get('type') == 'video':
+                json_path = entry.get('json_path')
+                if json_path and os.path.exists(os.path.join(self.transcriptions_dir, json_path)):
+                    synced_history.append(entry)
+                else:
+                    logger.warning(f"Removendo entrada do histórico para vídeo não encontrado: {entry['id']}")
+                    history_changed = True
+            elif entry.get('type') == 'playlist':
+                synced_history.append(entry) # Mantém playlists por enquanto, a exclusão cuidará dos detalhes
+            else:
+                 synced_history.append(entry)
+
+        if history_changed:
+            # Salva o histórico limpo para evitar checagens repetidas
+            with open(self.history_path, 'w', encoding='utf-8') as f:
+                json.dump(synced_history, f, ensure_ascii=False, indent=2)
+
+        return synced_history
 
     def _save_history(self):
         """Salva os dados do histórico no arquivo JSON."""
         with open(self.history_path, 'w', encoding='utf-8') as f:
             json.dump(self.history_data, f, ensure_ascii=False, indent=2)
 
-    # --- MODIFICADO: Adaptado para aceitar diferentes tipos de entrada ---
     def add_entry(self, entry_data: Dict[str, Any]):
         """Adiciona uma nova entrada (vídeo ou playlist) ao histórico."""
-        # Garante que a entrada tenha os campos essenciais
         required_keys = ['id', 'title', 'type', 'created_at']
         if not all(key in entry_data for key in required_keys):
             logger.error(f"Tentativa de adicionar entrada de histórico inválida: {entry_data}")
@@ -59,36 +93,44 @@ class HistoryManager:
         self._save_history()
         logger.info(f"Entrada do tipo '{entry_data['type']}' adicionada ao histórico: {entry_data['id']}")
 
-    def remove_entry(self, entry_id: str) -> Optional[str]:
-        """Remove uma entrada do histórico e retorna o nome do arquivo JSON a ser deletado."""
-        entry_to_remove = next((entry for entry in self.history_data if entry['id'] == entry_id), None)
+    def remove_entry(self, entry_id: str) -> List[str]:
+        """Remove uma entrada do histórico e retorna uma lista de arquivos JSON para deletar."""
+        entry_to_remove = next((entry for entry in self.history_data if (entry.get('id') or entry.get('video_id')) == entry_id), None)
         
+        files_to_delete = []
         if entry_to_remove:
+            entry_type = entry_to_remove.get('type')
+            
+            if entry_type == 'video':
+                if entry_to_remove.get('json_path'):
+                    files_to_delete.append(entry_to_remove['json_path'])
+            
+            elif entry_type == 'playlist':
+                video_ids = entry_to_remove.get('video_ids', [])
+                for video_id in video_ids:
+                    files_to_delete.append(f"{video_id}.json")
+
             self.history_data.remove(entry_to_remove)
             self._save_history()
-            logger.info(f"Entrada removida do histórico para o ID: {entry_id}")
-            # Retorna o json_path apenas se for um vídeo
-            return entry_to_remove.get('json_path')
-        return None
+            logger.info(f"Entrada '{entry_id}' removida do histórico.")
+        
+        return files_to_delete
 
     def get_history(self) -> List[Dict[str, Any]]:
-        """Retorna todos os dados do histórico."""
+        """Retorna todos os dados do histórico já sincronizado."""
         return self.history_data
+
 
 class YouTubeHandler:
     """Classe responsável por todas as operações relacionadas ao YouTube."""
     
-    # MODIFICADO: A função __init__ agora calcula o caminho absoluto
     def __init__(self):
         """
         Inicializa o handler com diretório de saída para armazenar transcrições.
         Calcula o caminho absoluto para a pasta 'data' para evitar erros.
         """
-        # Caminho para o diretório atual do script (backend)
         backend_dir = os.path.dirname(os.path.abspath(__file__))
-        # Caminho para o diretório raiz do projeto (um nível acima do backend)
         project_root = os.path.dirname(backend_dir)
-        # Caminho para o diretório de transcrições
         output_dir_path = os.path.join(project_root, 'data', 'transcriptions')
 
         self.output_dir = os.path.normpath(output_dir_path)
@@ -96,9 +138,13 @@ class YouTubeHandler:
         logger.info(f"Diretório de transcrições configurado: {self.output_dir}")
         
         self.headers = self._get_realistic_headers()
-        self.history_manager = HistoryManager(os.path.join(self.output_dir, 'history.json'))
+        self.history_manager = HistoryManager(
+            history_path=os.path.join(self.output_dir, 'history.json'),
+            transcriptions_dir=self.output_dir
+        )
 
-    # --- NOVO: Função para extrair informações de playlists ---
+    # --- (O restante do código da classe YouTubeHandler permanece o mesmo) ---
+    # ... (get_playlist_info, _get_realistic_headers, etc.) ...
     def get_playlist_info(self, url: str) -> Optional[Dict[str, Any]]:
         """Extrai informações de uma playlist, incluindo os vídeos contidos."""
         logger.info(f"Extraindo informações da playlist: {url}")
@@ -131,7 +177,6 @@ class YouTubeHandler:
             return None
         return None
     
-    # --- NOVO: Função para obter detalhes de uma playlist do histórico ---
     def get_playlist_details(self, playlist_id: str) -> Optional[Dict[str, Any]]:
         """Obtém os detalhes de uma playlist e o status de cada vídeo nela."""
         playlist_entry = next((p for p in self.history_manager.get_history() if p['id'] == playlist_id and p['type'] == 'playlist'), None)
@@ -164,7 +209,6 @@ class YouTubeHandler:
         }
         return playlist_details
 
-    # --- NOVO: Função para criar um arquivo ZIP com as transcrições da playlist ---
     def create_playlist_zip(self, playlist_id: str) -> Optional[Tuple[BytesIO, str]]:
         """Cria um arquivo ZIP em memória com todas as transcrições de uma playlist."""
         playlist_details = self.get_playlist_details(playlist_id)
@@ -384,7 +428,6 @@ class YouTubeHandler:
         sanitized = re.sub(r'\s+', '_', sanitized)
         return sanitized[:200]
 
-    # --- MODIFICADO: A função save_transcription_to_json agora chama o novo add_entry ---
     def save_transcription_to_json(self, video_id: str, title: str, transcript: str, 
                                    chunks: List[str], metadata: Dict) -> str:
         """Salva a transcrição em um arquivo JSON e atualiza o histórico."""
@@ -408,7 +451,7 @@ class YouTubeHandler:
         
         logger.info(f"Transcrição salva em: {filepath}")
 
-        # Cria a entrada para o histórico
+        # MODIFICADO: Cria a entrada para o histórico usando a chave 'id' padronizada.
         history_entry = {
             "id": video_id,
             "type": "video",
@@ -426,7 +469,6 @@ class YouTubeHandler:
             logger.error(f"URL inválida: {url}")
             return None, {}, None
 
-        # MODIFICADO: Usa a função de extração da própria classe
         video_id = self.extract_video_id(url)
         if not video_id:
             logger.error(f"ID do vídeo não encontrado na URL: {url}")
@@ -436,7 +478,6 @@ class YouTubeHandler:
 
         metadata = self._get_video_metadata(url, video_id)
         
-        # --- MÉTODO 1: API Especializada (youtube-transcript-api) ---
         try:
             logger.info(f"Tentando extrair com 'youtube-transcript-api' para {video_id}...")
             transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['pt', 'pt-BR', 'en'])
@@ -448,7 +489,6 @@ class YouTubeHandler:
             logger.info(f"Transcrição obtida com sucesso via 'youtube-transcript-api' para {video_id}")
 
             chunks = self.split_transcript_into_chunks(cleaned_transcript)
-            # MODIFICADO: Usa o video_id extraído consistentemente
             json_path = self.save_transcription_to_json(
                 video_id, metadata['title'], cleaned_transcript, chunks, metadata
             )
@@ -457,7 +497,6 @@ class YouTubeHandler:
         except Exception as api_error:
             logger.warning(f"Falha ao usar 'youtube-transcript-api': {api_error}. Ativando método fallback com yt-dlp.")
 
-        # --- MÉTODO 2: Fallback com yt-dlp (se o primeiro falhar) ---
         raw_transcript, fallback_metadata = self.download_subtitles_fallback(url, video_id)
         
         if fallback_metadata and fallback_metadata.get('title'):

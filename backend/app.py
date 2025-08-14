@@ -17,15 +17,11 @@ app = Flask(__name__,
             template_folder='../frontend/templates',
             static_folder='../frontend/static')
 
-# --- NOVO: Configuração do SocketIO ---
-# Usar 'threading' como async_mode é mais simples e não requer um servidor de eventos externo como eventlet ou gevent
-app.config['SECRET_KEY'] = 'your_super_secret_key' # Troque por uma chave segura
+app.config['SECRET_KEY'] = 'your_super_secret_key' 
 socketio = SocketIO(app, async_mode='threading')
 
-# Inicializar o handler do YouTube
 youtube_handler = YouTubeHandler()
 
-# --- NOVO: Função para detectar se a URL é de uma playlist ---
 def is_playlist(url: str) -> bool:
     """Verifica se uma URL do YouTube é de uma playlist."""
     playlist_pattern = r'list=([a-zA-Z0-9_-]+)'
@@ -37,7 +33,6 @@ def index():
     """Renderiza a página principal"""
     return render_template('index.html')
 
-# --- MODIFICADO: Rota unificada para processar tanto vídeo quanto playlist ---
 @app.route('/process_url', methods=['POST'])
 def process_url():
     """
@@ -52,15 +47,12 @@ def process_url():
     logger.info(f"Recebida URL para processamento: {url}")
 
     if is_playlist(url):
-        # Inicia o processamento da playlist em segundo plano
         socketio.start_background_task(target=process_playlist_task, url=url)
         return jsonify({"success": True, "message": "Processamento da playlist iniciado."})
     else:
-        # Inicia o processamento do vídeo em segundo plano
         socketio.start_background_task(target=process_video_task, url=url)
         return jsonify({"success": True, "message": "Processamento do vídeo iniciado."})
 
-# --- NOVO: Tarefa de background para processar um único vídeo ---
 def process_video_task(url: str):
     """
     Função executada em background para processar um vídeo e emitir eventos.
@@ -94,7 +86,6 @@ def process_video_task(url: str):
         socketio.emit('video_error', {'video_id': video_id, 'status': 'error', 'error': str(e)})
 
 
-# --- NOVO: Tarefa de background para processar uma playlist ---
 def process_playlist_task(url: str):
     """
     Função executada em background para processar uma playlist inteira.
@@ -108,7 +99,6 @@ def process_playlist_task(url: str):
     videos = playlist_info['videos']
     total_videos = len(videos)
 
-    # Adiciona a playlist ao histórico
     playlist_entry = {
         "id": playlist_id,
         "type": "playlist",
@@ -164,7 +154,7 @@ def process_playlist_task(url: str):
             })
             error_count += 1
         
-        youtube_handler._add_random_delay() # Adiciona um delay para não sobrecarregar o YouTube
+        youtube_handler._add_random_delay()
 
     socketio.emit('playlist_complete', {
         'playlist_id': playlist_id,
@@ -172,8 +162,8 @@ def process_playlist_task(url: str):
         'processed_count': processed_count,
         'error_count': error_count
     })
-
-# --- NOVA ROTA: Obter detalhes de uma playlist ---
+    
+# --- (Rotas /get_playlist_details e /download_playlist permanecem as mesmas) ---
 @app.route('/get_playlist_details/<playlist_id>', methods=['GET'])
 def get_playlist_details(playlist_id):
     """Retorna os detalhes de uma playlist e o status de cada vídeo."""
@@ -183,7 +173,6 @@ def get_playlist_details(playlist_id):
     return jsonify({"success": True, "details": details})
 
 
-# --- NOVA ROTA: Download de ZIP da playlist ---
 @app.route('/download_playlist/<playlist_id>', methods=['GET'])
 def download_playlist(playlist_id):
     """Cria e envia um arquivo ZIP com as transcrições da playlist."""
@@ -202,15 +191,12 @@ def download_playlist(playlist_id):
         logger.exception(f"Erro ao gerar ZIP para playlist {playlist_id}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
-
 @app.route('/download_transcription/<video_id>', methods=['GET'])
 def download_transcription(video_id):
     """
     Rota para baixar a transcrição em TXT
     """
     transcriptions_dir = youtube_handler.output_dir
-    
-    # Encontrar o arquivo JSON com este video_id
     filename = f"{video_id}.json"
     filepath = os.path.join(transcriptions_dir, filename)
 
@@ -222,27 +208,22 @@ def download_transcription(video_id):
         }), 404
     
     try:
-        # Carregar o arquivo JSON
         with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
-        # Criar conteúdo TXT
         txt_content = f"Transcrição do vídeo: {data['title']}\n"
         txt_content += f"ID do vídeo: {data['video_id']}\n"
         txt_content += f"Gerado em: {data['created_at']}\n\n"
         txt_content += "===== CONTEÚDO DO VÍDEO =====\n\n"
         txt_content += data['transcript']
         
-        # Sanitizar o título para o nome do arquivo
         safe_title = youtube_handler.sanitize_filename(data['title'])
         txt_filename = f"{safe_title[:50]}_transcricao.txt"
         
-        # Criar um objeto BytesIO para evitar criar arquivo temporário no disco
         temp_txt = BytesIO()
         temp_txt.write(txt_content.encode('utf-8'))
         temp_txt.seek(0)
         
-        # Enviar o arquivo para download diretamente da memória
         return send_file(
             temp_txt,
             mimetype='text/plain',
@@ -269,7 +250,6 @@ def get_transcription(video_id):
         return jsonify({"success": False, "error": "Transcrição não encontrada"}), 404
     
     try:
-        # Envia o arquivo JSON
         return send_file(filepath, mimetype='application/json')
     except Exception as e:
         logger.exception(f"Erro ao enviar transcrição para {video_id}: {str(e)}")
@@ -281,10 +261,11 @@ def get_transcription(video_id):
 @app.route('/get_history', methods=['GET'])
 def get_history():
     """
-    NOVA ROTA: Retorna o histórico de transcrições do arquivo history.json.
+    Retorna o histórico de transcrições do arquivo history.json.
     """
     try:
-        history_data = youtube_handler.history_manager.get_history()
+        # MODIFICADO: Recarrega e sincroniza o histórico a cada chamada para refletir exclusões manuais
+        history_data = youtube_handler.history_manager._load_and_sync_history()
         return jsonify({
             "success": True,
             "history": history_data
@@ -296,39 +277,38 @@ def get_history():
             "error": f"Erro interno ao obter o histórico: {str(e)}"
         }), 500
 
-@app.route('/delete_transcription/<video_id>', methods=['DELETE'])
-def delete_transcription_route(video_id):
+# MODIFICADO: Rota unificada para exclusão de qualquer tipo de entrada
+@app.route('/delete_entry/<entry_id>', methods=['DELETE'])
+def delete_entry_route(entry_id):
     """
-    NOVA ROTA: Exclui uma transcrição do histórico e o arquivo JSON associado.
+    Exclui uma entrada (vídeo ou playlist) do histórico e os arquivos JSON associados.
     """
-    if not video_id:
-        return jsonify({"success": False, "error": "ID do vídeo não fornecido"}), 400
+    if not entry_id:
+        return jsonify({"success": False, "error": "ID da entrada não fornecido"}), 400
 
     try:
-        # Remove a entrada do history.json e obtém o nome do arquivo a ser deletado
-        json_filename_to_delete = youtube_handler.history_manager.remove_entry(video_id)
+        # Remove a entrada do history.json e obtém a lista de arquivos a serem deletados
+        json_filenames_to_delete = youtube_handler.history_manager.remove_entry(entry_id)
 
-        if json_filename_to_delete:
-            # Monta o caminho completo para o arquivo JSON
-            filepath_to_delete = os.path.join(youtube_handler.output_dir, json_filename_to_delete)
-            
-            # Tenta deletar o arquivo físico
+        deleted_count = 0
+        for filename in json_filenames_to_delete:
+            filepath_to_delete = os.path.join(youtube_handler.output_dir, filename)
             if os.path.exists(filepath_to_delete):
                 os.remove(filepath_to_delete)
                 logger.info(f"Arquivo de transcrição {filepath_to_delete} deletado com sucesso.")
+                deleted_count += 1
             else:
-                logger.warning(f"Arquivo {filepath_to_delete} não encontrado para exclusão, mas a entrada do histórico foi removida.")
+                logger.warning(f"Arquivo {filepath_to_delete} não encontrado para exclusão.")
         
-        return jsonify({"success": True, "message": "Transcrição removida com sucesso."})
+        return jsonify({"success": True, "message": f"{deleted_count} arquivo(s) removido(s) com sucesso."})
 
     except Exception as e:
-        logger.exception(f"Erro ao deletar a transcrição para {video_id}: {str(e)}")
+        logger.exception(f"Erro ao deletar a entrada {entry_id}: {str(e)}")
         return jsonify({
             "success": False,
-            "error": f"Erro interno ao deletar a transcrição: {str(e)}"
+            "error": f"Erro interno ao deletar a entrada: {str(e)}"
         }), 500
 
-# --- MODIFICADO: O `if __name__ == '__main__':` agora inicia o servidor com SocketIO ---
 if __name__ == '__main__':
     os.makedirs('data/transcriptions', exist_ok=True)
     logger.info("Iniciando servidor com Socket.IO na porta 5000...")
