@@ -88,42 +88,42 @@ Este checklist permite monitorar o progresso de cada fase, garantindo que todos 
 
 ---
 
-#### **Nova Fase 4: Refinamento da Interface e Gerenciamento Avançado**
-
-* **Objetivo:** Aprimorar a experiência do usuário com as funcionalidades de gerenciamento, download e visuais que foram detalhadas.
-* **Componentes:**
-    * **Backend:**
-        * [cite_start][ ] Implementar a lógica de download unificado para playlists: criar um arquivo ZIP em memória contendo os JSONs individuais e o TXT consolidado[cite: 536].
-        * [ ] Criar o endpoint `DELETE` para excluir uma playlist inteira (removendo a entrada do histórico e todos os JSONs associados).
-        * [cite_start][ ] Implementar a lógica de reprocessamento de falhas para vídeos dentro de uma playlist[cite: 537].
-        * [cite_start][ ] Implementar a lógica de cancelamento de um processo em andamento[cite: 538].
-    * **Frontend:**
-        * [cite_start][ ] Implementar a alternância de temas claro/escuro, persistindo a escolha no `localStorage`[cite: 542, 565].
-        * [ ] Adicionar o botão de download de ZIP na visualização de playlist.
-        * [ ] Adicionar o botão de "Reprocessar falhas" e "Cancelar" na interface da playlist.
-        * [cite_start][ ] Garantir que a interface seja totalmente responsiva em desktops, tablets e celulares[cite: 541].
-* **Marcos de Conclusão da Fase:**
-    * [ ] Download de ZIP para playlists está funcional.
-    * [ ] Exclusão, reprocessamento e cancelamento de playlists funcionam como esperado.
-    * [ ] Temas claro/escuro e responsividade completa implementados.
+#### **Fase 4: Refinamentos da Funcionalidade de Playlist e Gerenciamento**
+* **Objetivo:** Aprimorar a experiência do usuário com playlists, corrigindo e refinando o download, a estrutura de histórico e a lógica de exclusão.
+* **Componentes e Tarefas:**
+  * **Funcionalidade de Download do ZIP:**
+    * **Backend (`backend/youtube_handler.py`, `backend/app.py`):**
+      * \[ \] Modificar a função de download do ZIP para ler o conteúdo de cada arquivo de transcrição (`.json`).
+      * \[ \] Extrair especificamente a string de texto contida na chave `"transcript"` de cada objeto JSON.
+      * \[ \] Para cada transcrição, criar um novo arquivo em memória, nomeado com o `video_id` e a extensão `.txt` (Ex: `video_id_exemplo.txt`).
+      * \[ \] Adicionar todos os arquivos `.txt` ao arquivo ZIP gerado.
+      * \[ \] Implementar uma lógica para criar um arquivo `transcricao_consolidada.txt` que contenha o texto de todas as transcrições concatenadas, separadas por uma linha divisória ou título do vídeo.
+      * \[ \] Adicionar este arquivo consolidado ao ZIP.
+      * \[ \] Na rota de download (`/download_playlist`), garantir que o cabeçalho `Content-Type` seja `application/zip` e que o arquivo ZIP seja retornado corretamente para o cliente.
+  * **Hierarquia do Histórico (`frontend/static/js/main.js`):**
+    * \[ \] Alterar a função `loadHistory()` para iterar sobre o histórico.
+    * \[ \] Para cada item, verificar se ele é uma playlist (`item.type === 'playlist'`).
+    * \[ \] Se for uma playlist, renderizar um elemento principal com um ícone de playlist e o título. Adicionar um ícone de expansão (por exemplo, `+` ou uma seta) que, quando clicado, exibe os vídeos da playlist como sub-itens.
+    * \[ \] Se for um vídeo, verificar se ele possui um `playlist_id` associado. Se sim, **não renderizar este vídeo na lista principal**. Ele será renderizado apenas como um sub-item da sua respectiva playlist.
+    * \[ \] Implementar a lógica de exibição/ocultação dos sub-itens da playlist.
+  * **Comportamento de Clique (`frontend/static/js/main.js`):**
+    * \[ \] Na função que lida com o evento de clique nos itens do histórico, adicionar uma condição para verificar se o item clicado é um vídeo que pertence a uma playlist.
+    * \[ \] Se for o caso, a ação de clique deve carregar a transcrição do vídeo na área central de conteúdo, mas **sem criar um novo item de histórico na barra lateral**. A barra lateral do histórico deve permanecer no mesmo estado.
 
 ---
 
-#### **Nova Fase 5: Otimização, Robustez e Finalização**
-
-* **Objetivo:** Garantir que o sistema seja robusto, eficiente e confiável, tratando casos extremos e otimizando o uso de recursos.
-* **Componentes:**
-    * **Backend:**
-        * [cite_start][ ] Implementar uma fila de processamento para limitar o número de transcrições simultâneas, monitorando o uso de CPU/RAM[cite: 545].
-        * [cite_start][ ] Implementar o sistema de recuperação de estado para que processos de playlist longos possam ser retomados em caso de reinicialização do servidor[cite: 547].
-        * [cite_start][ ] Implementar o limite de 3 tentativas para reprocessamento de vídeos com falha[cite: 548].
-    * **Frontend:**
-        * [ ] Exibir o status "Falha Permanente" para vídeos que atingiram o limite de reprocessamento.
-        * [cite_start][ ] Exibir mensagens de erro mais detalhadas e amigáveis, com links para um possível FAQ, conforme definido em RNF-06[cite: 546].
-    * **Geral:**
-        * [cite_start][ ] Realizar testes de usabilidade e compatibilidade nos principais navegadores (Chrome, Firefox, Edge)[cite: 449].
-        * [ ] Finalizar e revisar toda a documentação do projeto.
-* **Marcos de Conclusão da Fase:**
-    * [ ] Sistema otimizado para não sobrecarregar o servidor.
-    * [ ] Recuperação de estado e tratamento de falhas permanentes estão funcionais.
-    * [ ] Projeto testado, documentado e pronto para um lançamento estável.
+#### **Fase 5: Revisão Geral do Layout, UX e Finalização**
+* **Objetivo:** Finalizar a implementação com um layout e experiência de usuário alinhados com a documentação original e com as expectativas.
+* **Componentes e Tarefas:**
+  * **Layout e Responsividade (`frontend/templates/index.html`, `frontend/static/css/style.css`):**
+    * \[ \] Revisar o arquivo `style.css` para aplicar a paleta de cores, fontes (`Roboto` ou `Inter`) e a estrutura de três seções (`Header`, `Main`, `Footer`) conforme documentado.
+    * \[ \] Utilizar Media Queries ou classes de framework responsivo (se aplicável) para garantir que o layout se ajuste perfeitamente em telas de desktops, tablets e smartphones, eliminando barras de rolagem horizontais.
+    * \[ \] Implementar a lógica para alternar entre temas claro e escuro, modificando as variáveis CSS.
+    * \[ \] Utilizar o `localStorage` para persistir a escolha do tema, garantindo que a preferência do usuário seja mantida ao recarregar a página.
+  * **Tratamento de Erros e Mensagens:**
+    * \[ \] Garantir que mensagens de erro retornadas pelo backend (ex: URL inválida, vídeo privado) sejam exibidas de forma clara e amigável ao usuário no frontend.
+    * \[ \] Exibir mensagens de feedback em tempo real para ações como "Processando", "Concluído", "Falha".
+  * **Marcos de Conclusão da Fase:**
+    * \[ \] A interface possui um design consistente e está alinhada com a documentação.
+    * \[ \] O sistema é totalmente responsivo e funcional em diferentes dispositivos.
+    * \[ \] O tratamento de erros e a experiência do usuário foram refinados.
