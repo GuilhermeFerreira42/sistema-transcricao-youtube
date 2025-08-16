@@ -143,8 +143,6 @@ class YouTubeHandler:
             transcriptions_dir=self.output_dir
         )
 
-    # --- (O restante do código da classe YouTubeHandler permanece o mesmo) ---
-    # ... (get_playlist_info, _get_realistic_headers, etc.) ...
     def get_playlist_info(self, url: str) -> Optional[Dict[str, Any]]:
         """Extrai informações de uma playlist, incluindo os vídeos contidos."""
         logger.info(f"Extraindo informações da playlist: {url}")
@@ -209,8 +207,12 @@ class YouTubeHandler:
         }
         return playlist_details
 
+    # --- FUNÇÃO MODIFICADA PARA FASE 4 ---
     def create_playlist_zip(self, playlist_id: str) -> Optional[Tuple[BytesIO, str]]:
-        """Cria um arquivo ZIP em memória com todas as transcrições de uma playlist."""
+        """
+        Cria um arquivo ZIP em memória com as transcrições de uma playlist.
+        O ZIP conterá arquivos .txt individuais para cada vídeo e um .txt consolidado.
+        """
         playlist_details = self.get_playlist_details(playlist_id)
         if not playlist_details:
             return None
@@ -223,18 +225,28 @@ class YouTubeHandler:
                 if video['status'] == 'success':
                     json_filename = f"{video['id']}.json"
                     json_filepath = os.path.join(self.output_dir, json_filename)
+                    
                     if os.path.exists(json_filepath):
-                        # Adiciona o arquivo JSON individual ao ZIP
-                        zip_file.write(json_filepath, arcname=json_filename)
-                        
-                        # Adiciona o conteúdo ao TXT consolidado
-                        with open(json_filepath, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
+                        try:
+                            with open(json_filepath, 'r', encoding='utf-8') as f:
+                                data = json.load(f)
+                            
+                            transcript_text = data.get('transcript', '')
+                            video_title = data.get('title', 'Título desconhecido')
+                            
+                            # Adiciona o arquivo .txt individual ao ZIP
+                            individual_txt_filename = f"{self.sanitize_filename(video_title)[:100]}.txt"
+                            zip_file.writestr(individual_txt_filename, transcript_text.encode('utf-8'))
+                            
+                            # Adiciona o conteúdo ao TXT consolidado
                             consolidated_txt_content += "="*80 + "\n"
-                            consolidated_txt_content += f"VÍDEO: {data['title']}\n"
+                            consolidated_txt_content += f"VÍDEO: {video_title}\n"
                             consolidated_txt_content += f"ID: {data['video_id']}\n"
                             consolidated_txt_content += "="*80 + "\n\n"
-                            consolidated_txt_content += data.get('transcript', '') + "\n\n"
+                            consolidated_txt_content += transcript_text + "\n\n"
+
+                        except Exception as e:
+                            logger.error(f"Erro ao processar o arquivo {json_filename} para o ZIP: {e}")
 
             # Adiciona o arquivo TXT consolidado ao ZIP
             zip_file.writestr('transcricao_consolidada.txt', consolidated_txt_content.encode('utf-8'))

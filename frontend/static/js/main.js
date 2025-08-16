@@ -1,9 +1,9 @@
-// frontend/static/js/main.js (Corrigido para problemas de exclusão)
+// frontend/static/js/main.js (Atualizado para Fase 4)
 document.addEventListener('DOMContentLoaded', function() {
     // --- Conexão com o Socket.IO ---
     const socket = io();
 
-    // --- (Seletores de elementos permanecem os mesmos) ---
+    // --- Seletores de elementos ---
     const youtubeUrlInput = document.getElementById('youtube-url');
     const processBtn = document.getElementById('process-btn');
     const statusMessage = document.getElementById('status-message');
@@ -32,8 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const modalConfirmBtn = document.getElementById('modal-confirm-btn');
     let itemToDelete = null;
 
-
-    // --- (Funções auxiliares como showStatus, hideStatus, isValidYoutubeUrl permanecem as mesmas) ---
+    // --- Funções auxiliares ---
     function showStatus(message, type = 'info') {
         statusMessage.textContent = message;
         statusMessage.className = 'status-message';
@@ -54,73 +53,148 @@ document.addEventListener('DOMContentLoaded', function() {
         return youtubeRegex.test(url);
     }
 
-    // --- Lógica de Histórico (MODIFICADA para corrigir ID undefined) ---
+    // --- Lógica de Histórico (MODIFICADA PARA FASE 4) ---
 
-    function addHistoryItemToDOM(item, prepend = false) {
-        const emptyState = historyList.querySelector('.history-item-empty');
-        if (emptyState) emptyState.remove();
-        
+    /**
+     * Adiciona um item de vídeo standalone (não em playlist) ao DOM do histórico.
+     */
+    function addVideoItemToDOM(item) {
         const li = document.createElement('li');
-        li.className = 'history-item';
-        
-        // MODIFICADO: Garante que o ID seja pego de 'id' ou 'video_id'
-        const itemId = item.id || item.video_id;
-        li.dataset.id = itemId;
+        li.className = 'history-item history-video-item'; // Classe específica para vídeos
+        li.dataset.id = item.id;
         li.dataset.type = item.type;
         
-        const icon = item.type === 'playlist' 
-            ? '<i class="fas fa-list-ol"></i>' 
-            : '<i class="fab fa-youtube"></i>';
-
         li.innerHTML = `
-            <span class="history-item-icon">${icon}</span>
+            <span class="history-item-icon"><i class="fab fa-youtube"></i></span>
             <span class="history-item-title" title="${item.title}">${item.title}</span>
-            <button class="delete-history-btn" data-id="${itemId}" title="Excluir item">×</button>
+            <button class="delete-history-btn" data-id="${item.id}" title="Excluir item">×</button>
         `;
 
         li.addEventListener('click', () => {
-            if (item.type === 'video') {
-                loadTranscription(itemId);
-            } else if (item.type === 'playlist') {
-                loadPlaylistView(itemId);
-            }
-            setActiveHistoryItem(itemId);
+            loadTranscription(item.id);
+            setActiveHistoryItem(item.id);
         });
 
         li.querySelector('.delete-history-btn').addEventListener('click', (e) => {
             e.stopPropagation();
-            openDeleteModal(itemId);
+            openDeleteModal(item.id);
         });
 
-        if (prepend) {
-            historyList.prepend(li);
-        } else {
-            historyList.appendChild(li);
-        }
+        historyList.appendChild(li);
     }
 
+    /**
+     * Adiciona um item de playlist ao DOM, com seus vídeos aninhados.
+     */
+    function addPlaylistItemToDOM(playlist, videoDetailsMap) {
+        const li = document.createElement('li');
+        li.className = 'history-item history-playlist-item'; // Classe específica para playlists
+        li.dataset.id = playlist.id;
+        li.dataset.type = playlist.type;
+
+        li.innerHTML = `
+            <div class="history-item-header">
+                <span class="expand-btn"><i class="fas fa-chevron-right"></i></span>
+                <span class="history-item-icon"><i class="fas fa-list-ol"></i></span>
+                <span class="history-item-title" title="${playlist.title}">${playlist.title}</span>
+                <button class="delete-history-btn" data-id="${playlist.id}" title="Excluir playlist">×</button>
+            </div>
+            <ul class="video-sublist" style="display: none;"></ul>
+        `;
+
+        const sublist = li.querySelector('.video-sublist');
+        if (playlist.video_ids && playlist.video_ids.length > 0) {
+            playlist.video_ids.forEach(videoId => {
+                const video = videoDetailsMap.get(videoId);
+                if (video) {
+                    const subLi = document.createElement('li');
+                    subLi.className = 'history-sub-item';
+                    subLi.dataset.id = video.id;
+                    subLi.innerHTML = `
+                        <span class="history-item-icon sub-icon"><i class="fab fa-youtube"></i></span>
+                        <span class="history-item-title">${video.title}</span>`;
+                    
+                    // Comportamento de clique para sub-item: carrega transcrição mas mantém a playlist ativa
+                    subLi.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        loadTranscription(video.id);
+                        setActiveHistoryItem(playlist.id); // Mantém a playlist como item ativo
+                    });
+                    sublist.appendChild(subLi);
+                }
+            });
+        } else {
+            sublist.innerHTML = `<li class="history-sub-item-empty">Playlist vazia.</li>`;
+        }
+
+        // Evento para abrir a visualização da playlist
+        li.querySelector('.history-item-header').addEventListener('click', () => {
+            loadPlaylistView(playlist.id);
+            setActiveHistoryItem(playlist.id);
+        });
+        
+        // Evento para expandir/recolher a sublista
+        const expandBtn = li.querySelector('.expand-btn');
+        expandBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Impede que o clique dispare o evento do header
+            const isExpanded = sublist.style.display === 'block';
+            sublist.style.display = isExpanded ? 'none' : 'block';
+            expandBtn.querySelector('i').classList.toggle('fa-chevron-right', isExpanded);
+            expandBtn.querySelector('i').classList.toggle('fa-chevron-down', !isExpanded);
+        });
+
+        li.querySelector('.delete-history-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            openDeleteModal(playlist.id);
+        });
+
+        historyList.appendChild(li);
+    }
+    
+    /**
+     * Carrega e organiza o histórico em playlists e vídeos independentes.
+     */
     async function loadHistory() {
         try {
             const response = await fetch('/get_history');
             const data = await response.json();
-            if (data.success && data.history) {
-                historyList.innerHTML = '';
-                if (data.history.length === 0) {
-                    historyList.innerHTML = '<li class="history-item-empty">Nenhum histórico.</li>';
-                    return;
-                }
-                data.history.forEach(item => addHistoryItemToDOM(item));
-            } else {
-                console.error("Erro ao carregar histórico:", data.error);
-                historyList.innerHTML = '<li class="history-item-empty">Erro ao carregar histórico.</li>';
+            historyList.innerHTML = ''; 
+
+            if (!data.success || !data.history || data.history.length === 0) {
+                historyList.innerHTML = '<li class="history-item-empty">Nenhum histórico.</li>';
+                return;
             }
+
+            const allItems = data.history;
+            const videoDetailsMap = new Map(allItems.map(item => [item.id, item]));
+            const playlistVideoIds = new Set();
+            
+            // Separa playlists e encontra todos os IDs de vídeos que pertencem a elas
+            const playlists = allItems.filter(item => {
+                if (item.type === 'playlist') {
+                    item.video_ids.forEach(vid => playlistVideoIds.add(vid));
+                    return true;
+                }
+                return false;
+            });
+            
+            // Filtra vídeos que não pertencem a nenhuma playlist
+            const standaloneVideos = allItems.filter(
+                item => item.type === 'video' && !playlistVideoIds.has(item.id)
+            );
+
+            // Renderiza as playlists com seus vídeos aninhados
+            playlists.forEach(playlist => addPlaylistItemToDOM(playlist, videoDetailsMap));
+            
+            // Renderiza os vídeos independentes
+            standaloneVideos.forEach(video => addVideoItemToDOM(video));
+
         } catch (error) {
             console.error('Falha na requisição do histórico:', error);
             historyList.innerHTML = '<li class="history-item-empty">Falha ao conectar com o servidor.</li>';
         }
     }
     
-    // --- (O restante do código de UI e processamento permanece o mesmo) ---
     function setActiveHistoryItem(id) {
         document.querySelectorAll('.history-item').forEach(item => {
             item.classList.remove('active');
@@ -134,7 +208,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const searchTerm = searchHistoryInput.value.toLowerCase();
         document.querySelectorAll('.history-item').forEach(item => {
             const title = item.querySelector('.history-item-title').textContent.toLowerCase();
-            item.style.display = title.includes(searchTerm) ? 'flex' : 'none';
+            item.style.display = title.includes(searchTerm) ? 'block' : 'none'; // 'block' para li
         });
     });
 
@@ -157,7 +231,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url })
             });
-
             const data = await response.json();
 
             if (data.success) {
@@ -183,7 +256,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const response = await fetch(`/get_transcription/${videoId}`);
             const data = await response.json();
             if (data.error) throw new Error(data.error);
-            
+
             const fullData = {
                 video_id: videoId,
                 title: data.title,
@@ -204,7 +277,6 @@ document.addEventListener('DOMContentLoaded', function() {
         hideAllViews();
         processingIndicator.style.display = 'flex';
         processingIndicatorText.textContent = 'Carregando detalhes da playlist...';
-        
         try {
             const response = await fetch(`/get_playlist_details/${playlistId}`);
             const data = await response.json();
@@ -212,7 +284,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const details = data.details;
             playlistViewTitle.textContent = `Vídeos em: ${details.title}`;
-            playlistViewVideoList.innerHTML = ''; // Limpa a lista anterior
+            playlistViewVideoList.innerHTML = '';
 
             if (details.videos.length > 0) {
                 details.videos.forEach(video => {
@@ -226,7 +298,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     li.addEventListener('click', () => {
                         if (video.status === 'success') {
                             loadTranscription(video.id);
-                            setActiveHistoryItem(playlistId);
+                            setActiveHistoryItem(playlistId); // Mantém a playlist ativa
                         }
                     });
                     playlistViewVideoList.appendChild(li);
@@ -249,7 +321,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-
     function updateUIWithTranscription(data) {
         hideAllViews();
         videoTitle.textContent = data.title;
@@ -269,25 +340,16 @@ document.addEventListener('DOMContentLoaded', function() {
         deleteModal.style.display = 'none';
     }
 
-    // MODIFICADO: Função de exclusão para usar a nova rota unificada
     async function confirmDelete() {
         if (!itemToDelete) return;
-
         try {
-            // Usa a nova rota /delete_entry/ que funciona para vídeos e playlists
             const response = await fetch(`/delete_entry/${itemToDelete}`, { method: 'DELETE' });
             const data = await response.json();
 
             if (data.success) {
                 showStatus('Item excluído com sucesso.', 'success');
-                const itemToRemove = historyList.querySelector(`[data-id="${itemToDelete}"]`);
-                if (itemToRemove) {
-                    itemToRemove.remove();
-                }
-
-                if (historyList.children.length === 0) {
-                     historyList.innerHTML = '<li class="history-item-empty">Nenhum histórico.</li>';
-                }
+                // A maneira mais simples e robusta de atualizar a UI hierárquica é recarregar o histórico
+                loadHistory(); 
 
                 const activeItem = document.querySelector('.history-item.active');
                 if (!activeItem || (activeItem && activeItem.dataset.id === itemToDelete)) {
@@ -305,7 +367,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // --- (Listeners de Socket.IO permanecem os mesmos) ---
+    // --- Listeners de Socket.IO ---
     socket.on('connect', () => {
         console.log('Conectado ao servidor via Socket.IO');
     });
@@ -362,14 +424,8 @@ document.addEventListener('DOMContentLoaded', function() {
             updateUIWithTranscription(data);
             showStatus('Vídeo processado com sucesso!', 'success');
             processBtn.disabled = false;
-        }
-        
-        if (!data.playlist_id) {
-            const existingItem = historyList.querySelector(`[data-id="${data.video_id}"]`);
-            if (!existingItem) {
-                addHistoryItemToDOM({ id: data.video_id, title: data.title, type: 'video' }, true);
-                setActiveHistoryItem(data.video_id);
-            }
+            loadHistory(); // Recarrega o histórico para adicionar o novo vídeo
+            setActiveHistoryItem(data.video_id);
         }
     });
 
@@ -407,7 +463,7 @@ document.addEventListener('DOMContentLoaded', function() {
     youtubeUrlInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') processUrl(); });
     modalCancelBtn.addEventListener('click', closeDeleteModal);
     modalConfirmBtn.addEventListener('click', confirmDelete);
-
+    
     // --- Inicialização ---
     loadHistory();
 });
