@@ -2009,3 +2009,431 @@ Barra Lateral: Com a lista de histórico de vídeos e playlists.
 
 9. Conclusão
 Esta documentação serve como o guia definitivo para a próxima fase de desenvolvimento. Ela formaliza a arquitetura e as decisões tomadas, garantindo que a equipe possa avançar com um entendimento claro dos requisitos e um roteiro bem definido para a implementação.
+
+
+==========================================
+Conteúdo de Documentacao_Sistema_Transcricao_Download_YouTube_Parte9(9)
+==========================================
+
+# Documentação Detalhada do Sistema - Parte 9: Reorganização do Desenvolvimento (Fases 5, 6 e 7)
+
+## Introdução
+Esta documentação formaliza a reorganização do plano de desenvolvimento com base no feedback da equipe. As funcionalidades centrais estão estáveis, e o foco agora se volta para a refatoração do código, aprimoramento da experiência do usuário (UX) e a expansão robusta de funcionalidades. A antiga Fase 5 ("Revisão Geral do Layout, UX e Finalização") foi adiada e se torna a **nova Fase 7**, permitindo a inserção de duas novas fases intermediárias críticas.
+
+---
+
+## **Fase 5: Refatoração do Frontend e Melhorias de Usabilidade**
+
+### 1. Introdução e Objetivo
+Esta fase marca um ponto de maturação no ciclo de vida do projeto. Com as funcionalidades centrais de transcrição de vídeos e playlists implementadas, o foco agora se volta para a **sustentabilidade do código e a melhoria da experiência do usuário (UX)**. O objetivo principal desta fase é refatorar a base de código do frontend para torná-la mais modular e de fácil manutenção, ao mesmo tempo em que se implementam aprimoramentos de usabilidade que tornarão a navegação mais intuitiva e o sistema mais informativo.
+
+### 2. Escopo do Sistema/Projeto
+As funcionalidades a serem implementadas nesta fase são focadas em aprimorar a estrutura do código e a interface do usuário. O escopo inclui:
+
+* **Refatoração do Frontend:** O arquivo `main.js` será dividido em múltiplos módulos, cada um com uma responsabilidade única (UI, API, Sockets, etc.).
+* **Melhorias de Identidade Visual:** Adição de um Favicon e um logotipo "Home" clicável.
+* **Aprimoramento da Navegação:** Implementação de um botão "Voltar para a Playlist" e a exibição do link original do vídeo.
+* **Correção de Funcionalidade:** Garantir que a busca no histórico funcione de forma dinâmica e abrangente, incluindo vídeos aninhados em playlists.
+
+### 3. Requisitos Funcionais (RF)
+
+| Código | Requisito | Descrição |
+| :--- | :--- | :--- |
+| **RF-11** | Busca Abrangente no Histórico | O campo de busca na barra lateral deve filtrar dinamicamente todos os itens do histórico, incluindo vídeos que estão dentro de playlists recolhidas. A busca deve ser instantânea, no lado do cliente. |
+| **RF-12** | Botão de Navegação "Voltar" | Quando um usuário clica em um vídeo a partir da visualização de uma playlist na área central, a tela de transcrição do vídeo deve exibir um botão "Voltar para a Playlist". Este botão não deve aparecer para vídeos acessados diretamente do histórico. |
+| **RF-13** | Exibição do Link Original do Vídeo | Na tela de visualização da transcrição de um vídeo, o sistema deve exibir o link original do YouTube para aquele vídeo, permitindo que o usuário o acesse com um clique. |
+| **RF-14** | Navegação para Página Inicial | Um ícone/logotipo clicável deve ser posicionado no canto superior esquerdo da barra lateral. Ao ser clicado, ele deve redefinir a área de conteúdo central para seu estado inicial, limpando qualquer transcrição ou playlist que esteja sendo exibida. |
+
+### 4. Requisitos Não Funcionais (RNF)
+
+| Código | Requisito | Descrição |
+| :--- | :--- | :--- |
+| **RNF-15** | Modularização do Código Frontend | O arquivo `frontend/static/js/main.js` deve ser refatorado e dividido em, no mínimo, três arquivos menores com responsabilidades bem definidas (ex: `ui.js`, `api.js`, `socket.js`, `history.js`) para melhorar a legibilidade e a manutenção. |
+| **RNF-16** | Identidade Visual do Navegador (Favicon) | O sistema deve exibir um favicon customizado na aba do navegador para fácil identificação. |
+
+### 5. Instruções para Implementação
+
+1.  **Modularização do `main.js`:**
+    * Crie uma nova estrutura de pastas: `frontend/static/js/modules/`.
+    * Crie os arquivos `ui.js`, `api.js`, `socket.js` e `history.js`.
+    * Mova as funções relacionadas à manipulação do DOM (mostrar/ocultar seções, criar elementos) para `ui.js`.
+    * Mova as funções que fazem chamadas `fetch` (processar URL, buscar histórico, etc.) para `api.js`.
+    * Mova toda a lógica de `socket.on()` para `socket.js`.
+    * Mova as funções `loadHistory` e a lógica de renderização do histórico para `history.js`.
+    * O arquivo `main.js` principal se tornará um orquestrador, importando e inicializando os módulos.
+
+2.  **Busca no Histórico:**
+    * A lógica de busca em `history.js` deve iterar sobre todos os elementos do histórico (incluindo sub-itens) e manipular a propriedade `display` de seus elementos pai (`.history-playlist-item`) se um filho corresponder à busca. Se uma playlist for expandida após a busca, os itens correspondentes já devem estar visíveis.
+
+3.  **Botão Voltar e Link do Vídeo:**
+    * O backend, na rota `/get_transcription/<video_id>`, precisa ser modificado para também retornar a URL do vídeo (que pode ser reconstruída a partir do `video_id`).
+    * No frontend (`ui.js`), a função que renderiza a transcrição (`updateUIWithTranscription`) deve receber um parâmetro opcional, `sourcePlaylistId`. Se este parâmetro for fornecido, o botão "Voltar" será criado e exibido.
+    * A função que lida com o clique em um vídeo na visualização de playlist (`loadPlaylistView`) deve passar o ID da playlist para a função que carrega a transcrição.
+
+### 6. Exemplos de Código Crítico
+
+**Exemplo de `main.js` refatorado (conceitual):**
+
+```javascript
+// frontend/static/js/main.js (após refatoração)
+import { initUI, showTranscription } from './modules/ui.js';
+import { processUrl, loadHistory } from './modules/api.js';
+import { initializeSocket } from './modules/socket.js';
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Inicializa os elementos da UI e os event listeners básicos
+    initUI(); 
+
+    // Carrega o histórico inicial
+    loadHistory();
+
+    // Inicializa a conexão e os listeners do Socket.IO
+    initializeSocket();
+});
+````
+
+**Exemplo da lógica do Botão "Voltar" em `ui.js`:**
+
+```javascript
+// frontend/static/js/modules/ui.js
+
+// ... outros seletores ...
+const backToPlaylistBtn = document.getElementById('back-to-playlist-btn');
+
+export function updateUIWithTranscription(data, sourcePlaylistId = null) {
+    // ... código para exibir título, thumbnail, etc. ...
+    
+    // Adiciona o link do vídeo
+    const videoLinkElement = document.getElementById('video-original-link');
+    videoLinkElement.href = `https://www.youtube.com/watch?v=${data.video_id}`;
+    videoLinkElement.style.display = 'block';
+
+    if (sourcePlaylistId) {
+        backToPlaylistBtn.style.display = 'block';
+        backToPlaylistBtn.onclick = () => {
+            // Função que recarrega a visualização da playlist
+            loadPlaylistView(sourcePlaylistId); 
+        };
+    } else {
+        backToPlaylistBtn.style.display = 'none';
+    }
+}
+```
+
+## 7\. Checklist de Requisitos (Fase 5)
+
+| Código | Requisito | Status |
+| :--- | :--- | :--- |
+| RF-11 | Busca Abrangente no Histórico | `[ ]` Não iniciado |
+| RF-12 | Botão de Navegação "Voltar" | `[ ]` Não iniciado |
+| RF-13 | Exibição do Link Original do Vídeo | `[ ]` Não iniciado |
+| RF-14 | Navegação para Página Inicial | `[ ]` Não iniciado |
+| RNF-15 | Modularização do Código Frontend | `[ ]` Não iniciado |
+| RNF-16 | Identidade Visual do Navegador (Favicon) | `[ ]` Não iniciado |
+
+## 8\. Árvore de Diretórios (Atualizada)
+
+```
+/projeto
+|-- /backend
+|   |-- ... (sem alterações)
+|-- /frontend
+|   |-- /static
+|   |   |-- /css
+|   |   |   |-- style.css
+|   |   |-- /js
+|   |   |   |-- /modules
+|   |   |   |   |-- api.js      <-- NOVO
+|   |   |   |   |-- history.js  <-- NOVO
+|   |   |   |   |-- socket.js   <-- NOVO
+|   |   |   |   |-- ui.js       <-- NOVO
+|   |   |   |-- main.js       <-- MODIFICADO (será o orquestrador)
+|   |   |-- /img
+|   |   |   |-- favicon.ico   <-- NOVO
+|   |   |   |-- logo.png      <-- NOVO
+|   |-- /templates
+|   |   |-- index.html      <-- MODIFICADO (para adicionar novos elementos)
+|-- ...
+```
+
+---
+
+## **Fase 6: Expansão de Funcionalidades e Robustez do Backend**
+
+### 1. Introdução e Objetivo
+Com o frontend refatorado e a usabilidade aprimorada, esta fase foca em expandir as capacidades centrais do sistema. O objetivo é tornar o backend mais robusto e versátil, aumentando a compatibilidade com diferentes tipos de links do YouTube e introduzindo uma nova funcionalidade de processamento em lote, que era uma demanda recorrente.
+
+### 2. Escopo do Sistema/Projeto
+O escopo desta fase está concentrado no backend e na lógica de processamento:
+
+* **Suporte a Novos Formatos de URL:** O sistema será aprimorado para reconhecer e processar links do formato YouTube Shorts.
+* **Processamento em Lote:** Será implementada uma funcionalidade que permite ao usuário colar múltiplos links de vídeos de uma vez. O sistema irá tratar essa lista como uma "playlist customizada", processando cada vídeo e agrupando-os em uma nova entrada de playlist no histórico.
+
+### 3. Requisitos Funcionais (RF)
+
+| Código | Requisito | Descrição |
+| :--- | :--- | :--- |
+| **RF-15** | Suporte a URLs de YouTube Shorts | O sistema deve ser capaz de validar, processar e extrair transcrições de URLs no formato `youtube.com/shorts/<video_id>`. |
+| **RF-16** | Processamento em Lote | O usuário deve poder inserir uma lista de URLs de vídeos (separados por quebra de linha) em uma área de texto. O sistema deve processar todos os links válidos e criar uma nova entrada de "Playlist Customizada" no histórico, contendo as transcrições de cada vídeo. |
+
+### 4. Requisitos Não Funcionais (RNF)
+
+| Código | Requisito | Descrição |
+| :--- | :--- | :--- |
+| **RNF-17** | Validação Robusta de URLs | A lógica de validação de URLs no backend deve ser atualizada com expressões regulares mais abrangentes para cobrir os diferentes formatos de links do YouTube, incluindo `youtu.be`, `shorts`, e variações com ou sem `www`. |
+
+### 5. Instruções para Implementação
+
+1.  **Suporte a Shorts e Validação de URL:**
+    * Revise e atualize as expressões regulares nas funções `validate_youtube_url` e `extract_video_id` para incluir o padrão `/shorts/`.
+    * Teste exaustivamente com diferentes formatos de URL para garantir que o `video_id` seja sempre extraído corretamente.
+2.  **Processamento em Lote:**
+    * **Frontend:** Modifique o `index.html` para substituir o `<input type="text">` por uma `<textarea>`, permitindo múltiplas linhas. Adicione um texto instrucional.
+    * **Backend (`app.py`):** Modifique a rota `/process_url`.
+        * Ela agora deve esperar um texto que pode conter múltiplas URLs.
+        * Divida o texto de entrada por quebras de linha para obter uma lista de URLs.
+        * Filtre a lista para manter apenas URLs válidas do YouTube.
+        * Se houver apenas uma URL, o comportamento atual (processar vídeo ou playlist) se mantém.
+        * Se houver múltiplas URLs de vídeo, inicie uma nova tarefa em segundo plano (`process_batch_task`).
+    * **Backend (`youtube_handler.py`):** Crie a nova função `process_batch_task`.
+        * Ela deve criar uma nova entrada de playlist no `HistoryManager` com um título genérico e um ID único.
+        * Em seguida, ela deve iterar sobre a lista de URLs de vídeo, processando cada uma de forma similar à `process_playlist_task`, emitindo eventos `Socket.IO` para o frontend.
+
+---
+
+## **Fase 7: Finalização da Interface e Experiência do Usuário (Antiga Fase 5)**
+
+### 1. Introdução e Objetivo
+Esta é a fase de polimento final. Com todas as funcionalidades críticas e a estrutura de código estabelecidas, o objetivo é refinar a aparência visual do sistema, garantir que ele seja totalmente acessível em diferentes dispositivos e implementar a personalização de temas, entregando uma experiência de usuário coesa e profissional.
+
+### 2. Escopo do Sistema/Projeto
+O escopo está inteiramente focado no frontend:
+
+* **Implementação de Temas:** O sistema oferecerá temas claro e escuro, com a preferência do usuário sendo salva.
+* **Responsividade Completa:** O layout será revisado e aprimorado com `media queries` para garantir uma ótima visualização e funcionalidade em desktops, tablets e smartphones.
+* **Revisão Geral do Layout:** Ajustes finos no CSS para garantir consistência em espaçamentos, fontes e cores, alinhando a interface com a documentação de design.
+
+### 3. Requisitos Funcionais (RF)
+
+| Código | Requisito | Descrição |
+| :--- | :--- | :--- |
+| **RF-17** | Persistência de Tema | A escolha do tema (claro ou escuro) pelo usuário deve ser salva no `localStorage` do navegador, de modo que a preferência seja mantida em visitas futuras. |
+
+### 4. Requisitos Não Funcionais (RNF)
+
+| Código | Requisito | Descrição |
+| :--- | :--- | :--- |
+| **RNF-18** | Temas Claro e Escuro | O sistema deve ter um botão de alternância que modifica as cores da interface entre um tema claro (padrão) e um tema escuro. A implementação deve usar variáveis CSS para facilitar a troca de paletas. |
+| **RNF-19** | Responsividade Total | A interface deve se adaptar fluidamente a diferentes larguras de tela, sem quebras de layout ou barras de rolagem horizontais. A barra lateral pode ser recolhida ou se transformar em um menu "hambúrguer" em telas menores. |
+
+### 5. Instruções para Implementação
+
+1.  **Implementação de Temas:**
+    * **CSS:** Defina todas as cores do sistema como variáveis CSS no seletor `:root` em `style.css`. Crie um seletor de atributo, como `body[data-theme='dark']`, para sobrescrever essas variáveis com as cores do tema escuro.
+    * **HTML:** Adicione um botão de alternância de tema no cabeçalho ou na barra lateral.
+    * **JavaScript (`ui.js`):** Crie uma função que:
+        * Verifica o `localStorage` na inicialização para aplicar o tema salvo.
+        * Adiciona um `event listener` ao botão de alternância. Ao ser clicado, ele troca o valor do atributo `data-theme` no `<body>` e salva a nova preferência no `localStorage`.
+2.  **Responsividade:**
+    * **CSS:** Utilize `media queries` em `style.css` para definir breakpoints (ex: `@media (max-width: 1024px)` e `@media (max-width: 768px)`).
+    * Para telas de tablet, a largura da barra lateral (`--sidebar-width`) pode ser reduzida.
+    * Para telas de celular, a barra lateral deve ser ocultada por padrão e um botão "hambúrguer" deve ser exibido para mostrá-la/ocultá-la. O layout principal (`.main-layout`) deve mudar de `display: flex` para `display: block`.
+
+---
+
+## Esboço de Árvore de Diretórios para o Projeto Refatorado (Visão Ideal)
+
+Aqui está o esboço da árvore de diretórios, com uma breve descrição da responsabilidade de cada arquivo/pasta, incluindo as funcionalidades que você mencionou e já pensando nas futuras fases (Fase 6 e 7, e além).
+
+```
+sistema-transcricao-youtube/
+├── .env                                # Variáveis de ambiente (configurações sensíveis, chaves de API, etc.)
+├── .gitignore                          # Arquivos e pastas a serem ignorados pelo Git
+├── README.md                           # Documentação geral do projeto, setup, como rodar, etc.
+├── requirements.txt                    # Dependências Python do backend
+├── package.json                        # Dependências JavaScript do frontend (se usar npm/yarn para gerenciar)
+├── Dockerfile                          # (Opcional) Para conteinerização da aplicação
+├── docker-compose.yml                  # (Opcional) Para orquestração de serviços Docker
+│
+├── backend/                            # Código-fonte do servidor Flask (Python)
+│   ├── __init__.py                     # Inicialização do Flask app, configurações básicas
+│   ├── main.py                         # Ponto de entrada principal do backend (substitui app.py)
+│   │                                   #   - Inicializa Flask, Socket.IO, Logger
+│   │                                   #   - Registra blueprints (rotas)
+│   │                                   #   - Inicia o servidor
+│   │
+│   ├── config.py                       # Configurações da aplicação (não sensíveis, como diretórios, limites)
+│   ├── extensions.py                   # Instâncias de extensões (SocketIO, Logger, etc.) para evitar importações circulares
+│   │
+│   ├── api/                            # Módulo para as rotas da API REST
+│   │   ├── __init__.py                 # Registra blueprints da API
+│   │   ├── auth.py                     # (Futuro) Rotas de autenticação (login, logout)
+│   │   ├```markdown
+│   │   ├── video_routes.py             # Rotas para vídeos individuais (/process_video, /download_transcription, /get_transcription)
+│   │   ├── playlist_routes.py          # Rotas para playlists (/process_playlist, /download_playlist, /get_playlist_details)
+│   │   └── history_routes.py           # Rotas para histórico (/get_history, /delete_entry)
+│   │
+│   ├── services/                       # Lógica de negócio principal (substitui youtube_handler.py e parte de utils.py)
+│   │   ├── __init__.py
+│   │   ├── youtube_service.py          # Interação com YouTube (yt-dlp, youtube-transcript-api, metadados, sanitização de URL)
+│   │   │                               #   - `extract_video_id`, `is_playlist`, `validate_youtube_url`
+│   │   │                               #   - `get_video_metadata`, `get_playlist_info`
+│   │   │                               #   - `download_and_clean_transcript` (orquestra a extração de legendas)
+│   │   │                               #   - `download_subtitles_fallback`
+│   │   │                               #   - `clean_subtitles`
+│   │   │                               #   - `sanitize_filename` (agora aqui, pois é específico do contexto de arquivos do YouTube)
+│   │   │                               #   - **NOVO:** `process_multiple_urls` (Fase 6: para "playlist customizada")
+│   │   │                               #   - **NOVO:** `extract_short_id` (Fase 6: para YouTube Shorts)
+│   │   │
+│   │   ├── history_manager.py          # Gerenciamento do history.json (add, remove, load/sync)
+│   │   │                               #   - `HistoryManager` class
+│   │   │
+│   │   ├── processing_queue.py         # **NOVO:** Gerenciamento da fila de processamento (RNF-05)
+│   │   │                               #   - Fila de tarefas assíncronas
+│   │   │                               #   - Limite de processamento simultâneo
+│   │   │                               #   - Priorização (opcional)
+│   │   │
+│   │   ├── file_storage_service.py     # Gerenciamento de arquivos no disco (salvar/carregar JSONs, criar ZIPs)
+│   │   │                               #   - `save_transcription_to_json`
+│   │   │                               #   - `create_playlist_zip`
+│   │   │                               #   - `generate_txt_for_download`
+│   │   │
+│   │   └── text_processing_service.py  # (Opcional, se houver lógica complexa de texto além da limpeza)
+│   │                                   #   - `split_transcript_into_chunks`
+│   │                                   #   - (Futuro) `summarize_text`, `extract_keywords` (Fase 7+)
+│   │
+│   ├── tasks/                          # Funções que rodam em background (Socket.IO tasks)
+│   │   ├── __init__.py
+│   │   ├── video_tasks.py              # `process_video_task`
+│   │   └── playlist_tasks.py           # `process_playlist_task`
+│   │
+│   ├── utils/                          # Funções utilitárias genéricas (não específicas do YouTube)
+│   │   ├── __init__.py
+│   │   ├── decorators.py               # Decoradores customizados (ex: para autenticação)
+│   │   ├── helpers.py                  # Funções auxiliares diversas (ex: `generate_unique_id`)
+│   │   └── logger_config.py            # Configuração centralizada do logger
+│   │
+│   └── models/                         # (Opcional) Definições de modelos de dados (se usar ORM ou classes para dados)
+│       ├── __init__.py
+│       └── history_entry.py            # Classe para representar um item do histórico (VideoEntry, PlaylistEntry)
+│
+├── frontend/                           # Código-fonte do frontend (HTML, CSS, JavaScript)
+│   ├── public/                         # Arquivos estáticos que serão servidos diretamente (favicon, imagens)
+│   │   ├── favicon.ico                 # Favicon do sistema (RNF-16)
+│   │   ├── logo.png                    # Logo para o botão "Home" (RF-14)
+│   │   └── assets/                     # Outros assets (ícones, etc.)
+│   │
+│   ├── templates/                      # Templates HTML (Flask renderiza estes)
+│   │   └── index.html                  # Página principal (MODIFICADO para novos elementos)
+│   │
+│   └── src/                            # Código-fonte JavaScript e CSS (pode ser transpilado/bundlado)
+│       ├── main.js                     # Ponto de entrada do frontend (orquestrador, importa módulos)
+│       │
+│       ├── styles/                     # Arquivos CSS
+│       │   ├── main.css                # Estilos globais e layout principal
+│       │   ├── components.css          # Estilos para componentes específicos (botões, modais)
+│       │   ├── themes.css              # Definições de temas claro/escuro (RNF-02)
+│       │   └── responsive.css          # Media queries para responsividade (RNF-01)
+│       │
+│       ├── modules/                    # Módulos JavaScript (RNF-15)
+│       │   ├── ui_manager.js           # Manipulação do DOM, renderização de views (substitui grande parte do main.js atual)
+│       │   │                           #   - `updateUIWithTranscription`, `updatePlaylistView`, `showStatus`, `hideAllViews`
+│       │   │                           #   - `renderHistoryList` (chama history_renderer)
+│       │   │                           #   - **NOVO:** `renderVideoLink` (RF-13)
+│       │   │                           #   - **NOVO:** `renderBackButton` (RF-12)
+│       │   │                           #   - **NOVO:** `resetToInitialView` (RF-14)
+│       │   │
+│       │   ├── api_client.js           # Funções para fazer requisições HTTP (fetch) para o backend
+│       │   │                           #   - `processUrl`, `getHistory`, `getTranscription`, `getPlaylistDetails`, `deleteEntry`
+│       │   │
+│       │   ├── socket_handler.js       # Gerenciamento da conexão Socket.IO e listeners de eventos
+│       │   │                           #   - `initializeSocket`, `onConnect`, `onVideoProgress`, `onPlaylistComplete`, etc.
+│       │   │
+│       │   ├── history_renderer.js     # Lógica específica para renderizar itens do histórico (vídeos, playlists, sub-itens)
+│       │   │                           #   - `addVideoItemToDOM`, `addPlaylistItemToDOM`
+│       │   │                           #   - **NOVO:** Lógica de busca abrangente (RF-11)
+│       │   │
+│       │   ├── url_utils.js            # Funções utilitárias para URLs do YouTube (validação, extração de ID)
+│       │   │                           #   - `isValidYoutubeUrl`, `extractVideoId`
+│       │   │                           #   - **NOVO:** `isShortsUrl`, `extractShortsId` (Fase 6)
+│       │   │                           #   - **NOVO:** `normalizeYoutubeUrl` (Fase 6)
+│       │   │
+│       │   ├── event_listeners.js      # Centraliza todos os event listeners do DOM
+│       │   │                           #   - `setupInputListeners`, `setupHistoryListeners`, `setupModalListeners`
+│       │   │
+│       │   └── app_state.js            # **NOVO:** Gerenciamento de estado global do frontend
+│       │                               #   - `currentView`, `activeHistoryItem`, `lastPlaylistViewedId`
+│       │                               #   - Funções para atualizar e notificar sobre mudanças de estado
+│       │
+│       └── utils/                      # Utilitários JavaScript genéricos
+│           ├── dom_helpers.js          # Funções para manipulação de DOM de baixo nível
+│           └── validation.js           # Funções de validação genéricas
+│
+├── data/                               # Dados persistentes da aplicação
+│   ├── transcriptions/                 # Arquivos JSON das transcrições individuais
+│   │   └── (video_id).json
+│   └── history.json                    # Índice do histórico de vídeos e playlists
+│
+├── tests/                              # Testes automatizados (Python e JavaScript)
+│   ├── backend/
+│   │   ├── unit/
+│   │   │   ├── test_youtube_service.py
+│   │   │   └── test_history_manager.py
+│   │   ├── integration/
+│   │   │   └── test_api_routes.py
+│   │   └── e2e/                        # Testes end-to-end (ex: com Selenium)
+│   │       └── test_full_flow.py
+│   └── frontend/
+│       ├── unit/
+│       │   ├── test_ui_manager.js
+│       │   └── test_url_utils.js
+│       └── e2e/                        # Testes de interface (ex: com Cypress, Playwright)
+│           └── test_user_flows.js
+│
+└── docs/                               # Documentação do projeto
+    ├── architecture.md                 # Visão geral da arquitetura
+    ├── api_reference.md                # Documentação da API REST
+    ├── phases/                         # Documentação por fase de desenvolvimento
+    │   ├── phase_1_mvp_basic.md
+    │   ├── phase_2_history_management.md
+    │   ├── phase_3_playlists_realtime.md
+    │   ├── phase_4_playlist_refinements.md
+    │   ├── phase_5_frontend_refactor_ux.md  # Nova Fase 5
+    │   ├── phase_6_advanced_features.md     # Nova Fase 6 (Shorts, Multi-link)
+    │   └── phase_7_final_polish.md          # Nova Fase 7 (Temas, Responsividade Final)
+    └── troubleshooting.md              # FAQ e guia de solução de problemas
+```
+
+### Justificativa da Modularização e Responsabilidades
+
+1.  **Separação de Backend e Frontend:** Mantida e aprimorada. `backend/` e `frontend/` são mundos separados, comunicando-se via API e Sockets.
+2.  **Backend (`backend/`):**
+    *   **`main.py`:** O novo `app.py` centralizado. Sua única responsabilidade é inicializar o servidor e registrar os módulos.
+    *   **`api/`:** Cada arquivo aqui é um "blueprint" do Flask, agrupando rotas relacionadas. Isso evita um `app.py` gigante com centenas de `@app.route`.
+    *   **`services/`:** Onde a lógica de negócio reside. Cada "serviço" tem uma responsabilidade única:
+        *   `youtube_service.py`: Tudo que interage com o YouTube.
+        *   `history_manager.py`: Gerencia o `history.json`.
+        *   `processing_queue.py`: **CRÍTICO para RNF-05**. Implementa uma fila de tarefas (ex: `asyncio.Queue` ou uma biblioteca como `Celery` para algo mais robusto) que limita o número de processos simultâneos, evitando sobrecarga de CPU/RAM. As tarefas em background (`process_video_task`, `process_playlist_task`) seriam enfileiradas aqui.
+        *   `file_storage_service.py`: Abstrai a leitura/escrita de arquivos no disco, incluindo a lógica de ZIP.
+    *   **`tasks/`:** Funções que são executadas em segundo plano pelo Socket.IO. Elas chamam os serviços.
+    *   **`utils/`:** Funções auxiliares genéricas que não se encaixam em um serviço específico.
+    *   **`models/`:** Se o projeto crescer e precisar de um banco de dados ou de uma representação mais formal dos dados, as classes de modelo iriam aqui.
+3.  **Frontend (`frontend/`):**
+    *   **`public/`:** Para assets estáticos que não precisam de processamento (Favicon, logo).
+    *   **`src/`:** Onde o código JavaScript e CSS "fonte" vive.
+    *   **`main.js`:** Torna-se um orquestrador. Ele importa e inicializa os módulos, mas não contém a lógica de UI, API ou Sockets diretamente.
+    *   **`styles/`:** CSS modularizado. `main.css` para layout geral, `components.css` para elementos reutilizáveis, `themes.css` para a lógica de tema, e `responsive.css` para media queries.
+    *   **`modules/`:** Onde a mágica da modularização acontece (RNF-15).
+        *   `ui_manager.js`: Tudo sobre como a interface se parece e reage.
+        *   `api_client.js`: Encapsula todas as chamadas `fetch` para o backend.
+        *   `socket_handler.js`: Gerencia a conexão e os eventos do Socket.IO.
+        *   `history_renderer.js`: Lógica específica para renderizar a árvore do histórico e a busca (RF-11).
+        *   `url_utils.js`: Funções para lidar com URLs do YouTube, incluindo a validação e extração de IDs para Shorts (Fase 6).
+        *   `event_listeners.js`: Centraliza a configuração de todos os event listeners do DOM, mantendo o `ui_manager` mais limpo.
+        *   `app_state.js`: **CRÍTICO**. Um objeto de estado global para o frontend. Em vez de ler o DOM para saber o estado, você lê este objeto. Quando o estado muda, o `ui_manager` é notificado para atualizar o DOM. Isso resolve o problema de "gerenciamento de estado no frontend".
+4.  **`data/`:** Mantido para persistência de arquivos.
+5.  **`tests/`:** **ESSENCIAL**. Estrutura para testes unitários, de integração e E2E para backend e frontend. Sem isso, você está construindo um castelo de cartas.
+6.  **`docs/`:** Documentação organizada por tópicos e fases.
+
+Esta estrutura é um ponto de partida robusto. Ela permite que você e qualquer futuro desenvolvedor entendam rapidamente onde cada pedaço de lógica vive, facilitando a manutenção, a adição de novas funcionalidades (como as da Fase 6 e 7) e, o mais importante, evitando que o projeto se transforme em um pântano de código.
+```
