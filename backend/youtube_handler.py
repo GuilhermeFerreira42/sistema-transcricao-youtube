@@ -13,8 +13,8 @@ from typing import Dict, List, Optional, Tuple, Any
 from io import BytesIO
 import zipfile
 
+import utils
 from youtube_transcript_api import YouTubeTranscriptApi
-
 
 # Configuração do logger
 logger = logging.getLogger('youtube_handler')
@@ -66,15 +66,24 @@ class HistoryManager:
                     logger.warning(f"Removendo entrada do histórico para vídeo não encontrado: {entry['id']}")
                     history_changed = True
             elif entry.get('type') == 'playlist':
-                synced_history.append(entry) # Mantém playlists por enquanto, a exclusão cuidará dos detalhes
+                video_ids = entry.get('video_ids', [])
+                # Verifica se ao menos um vídeo da playlist existe
+                valid_videos = [vid for vid in video_ids if os.path.exists(os.path.join(self.transcriptions_dir, f"{vid}.json"))]
+                if valid_videos:
+                    # Atualiza a lista de vídeos válidos
+                    entry['video_ids'] = valid_videos
+                    synced_history.append(entry)
+                else:
+                    logger.warning(f"Removendo playlist do histórico sem vídeos válidos: {entry['id']}")
+                    history_changed = True
             else:
-                 synced_history.append(entry)
+                synced_history.append(entry)
 
         if history_changed:
+            self.history_data = synced_history
             # Salva o histórico limpo para evitar checagens repetidas
             with open(self.history_path, 'w', encoding='utf-8') as f:
-                json.dump(synced_history, f, ensure_ascii=False, indent=2)
-
+                json.dump(self.history_data, f, ensure_ascii=False, indent=2)
         return synced_history
 
     def _save_history(self):
@@ -95,25 +104,22 @@ class HistoryManager:
 
     def remove_entry(self, entry_id: str) -> List[str]:
         """Remove uma entrada do histórico e retorna uma lista de arquivos JSON para deletar."""
+        # Sempre recarrega o histórico do disco para garantir consistência
+        self.history_data = self._load_and_sync_history()
         entry_to_remove = next((entry for entry in self.history_data if (entry.get('id') or entry.get('video_id')) == entry_id), None)
-        
         files_to_delete = []
         if entry_to_remove:
             entry_type = entry_to_remove.get('type')
-            
             if entry_type == 'video':
                 if entry_to_remove.get('json_path'):
                     files_to_delete.append(entry_to_remove['json_path'])
-            
             elif entry_type == 'playlist':
                 video_ids = entry_to_remove.get('video_ids', [])
                 for video_id in video_ids:
                     files_to_delete.append(f"{video_id}.json")
-
             self.history_data.remove(entry_to_remove)
             self._save_history()
             logger.info(f"Entrada '{entry_id}' removida do histórico.")
-        
         return files_to_delete
 
     def get_history(self) -> List[Dict[str, Any]]:
@@ -235,7 +241,7 @@ class YouTubeHandler:
                             video_title = data.get('title', 'Título desconhecido')
                             
                             # Adiciona o arquivo .txt individual ao ZIP
-                            individual_txt_filename = f"{self.sanitize_filename(video_title)[:100]}.txt"
+                            individual_txt_filename = f"{utils.sanitize_filename(video_title)[:100]}.txt"
                             zip_file.writestr(individual_txt_filename, transcript_text.encode('utf-8'))
                             
                             # Adiciona o conteúdo ao TXT consolidado
@@ -252,7 +258,7 @@ class YouTubeHandler:
             zip_file.writestr('transcricao_consolidada.txt', consolidated_txt_content.encode('utf-8'))
 
         zip_buffer.seek(0)
-        safe_playlist_title = self.sanitize_filename(playlist_details['title'])
+        safe_playlist_title = utils.sanitize_filename(playlist_details['title'])
         zip_filename = f"{safe_playlist_title[:50]}_transcricoes.zip"
         
         return zip_buffer, zip_filename
@@ -293,59 +299,35 @@ class YouTubeHandler:
         content_lower = content.lower()
         return any(indicator.lower() in content_lower for indicator in block_indicators)
 
-    def validate_youtube_url(self, url: str) -> bool:
-        """Valida se a URL fornecida é um link válido do YouTube"""
-        youtube_regex = (
-            r'(https?://)?(www\.)?'
-            '(youtube|youtu|youtube-nocookie)\.(com|be)/'
-            '(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})'
-        )
-        return bool(re.match(youtube_regex, url))
-
-    def extract_video_id(self, url: str) -> Optional[str]:
-        """Extrai o ID do vídeo da URL do YouTube"""
-        patterns = [
-            r'(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=))([^"&?\/\s]{11})',
-            r'(?:youtu\.be\/|v\/|vi\/|u\/\w\/|embed\/)([^"&?\/\s]{11})'
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, url)
-            if match:
-                return match.group(1)
-        return None
-
-    def _get_video_metadata(self, url: str, video_id: str) -> Dict:
-        """Obtém apenas os metadados do vídeo usando yt-dlp."""
-        logger.info(f"Buscando metadados para o vídeo: {video_id}")
+    def _get_video_metadata(self, url, video_id):
+        """
+        Obtém metadados do vídeo usando yt_dlp.
+        """
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'skip_download': True,
+        }
         try:
-            ydl_opts = {
-                'skip_download': True,
-                'quiet': True,
-                'no_warnings': True,
-                'force_generic_extractor': False
-            }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
-                metadata = {
+                return {
                     'video_id': video_id,
                     'title': info.get('title', 'Vídeo sem título'),
                     'thumbnail': info.get('thumbnail', ''),
+                    'author': info.get('uploader', ''),
                     'duration': info.get('duration', 0),
-                    'view_count': info.get('view_count', 0),
-                    'uploader': info.get('uploader', ''),
-                    'upload_date': info.get('upload_date', '')
+                    'url': url
                 }
-                return metadata
         except Exception as e:
-            logger.error(f"Não foi possível obter metadados com yt-dlp para {video_id}: {e}")
+            logger.error(f"Erro ao obter metadados do vídeo {url}: {e}")
             return {
                 'video_id': video_id,
-                'title': 'Título indisponível',
+                'title': 'Título desconhecido',
                 'thumbnail': '',
+                'author': '',
                 'duration': 0,
-                'view_count': 0,
-                'uploader': '',
-                'upload_date': ''
+                'url': url
             }
 
     def download_subtitles_fallback(self, url: str, video_id: str) -> Tuple[Optional[str], Dict]:
@@ -434,12 +416,6 @@ class YouTubeHandler:
         words = transcript.split()
         return [' '.join(words[i:i + words_per_chunk]) for i in range(0, len(words), words_per_chunk)]
 
-    def sanitize_filename(self, filename: str) -> str:
-        """Sanitiza o nome do arquivo para evitar caracteres inválidos."""
-        sanitized = re.sub(r'[\\/*?:"<>|]', "", filename)
-        sanitized = re.sub(r'\s+', '_', sanitized)
-        return sanitized[:200]
-
     def save_transcription_to_json(self, video_id: str, title: str, transcript: str, 
                                    chunks: List[str], metadata: Dict) -> str:
         """Salva a transcrição em um arquivo JSON e atualiza o histórico."""
@@ -477,11 +453,11 @@ class YouTubeHandler:
 
     def download_and_clean_transcript(self, url: str) -> Tuple[Optional[str], Dict, Optional[str]]:
         """Função principal que coordena o download e limpeza da transcrição."""
-        if not self.validate_youtube_url(url):
+        if not utils.validate_youtube_url(url):
             logger.error(f"URL inválida: {url}")
             return None, {}, None
 
-        video_id = self.extract_video_id(url)
+        video_id = utils.extract_video_id(url)
         if not video_id:
             logger.error(f"ID do vídeo não encontrado na URL: {url}")
             return None, {}, None
