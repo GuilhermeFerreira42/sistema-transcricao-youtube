@@ -1,4 +1,4 @@
-Com base nos arquivos de código-fonte e na documentação de desenvolvimento fornecida, segue a documentação detalhada do seu projeto, abrangendo as fases 1 a 3.
+Com base nos arquivos de código-fonte e na documentação de desenvolvimento fornecida, segue a documentação detalhada do seu projeto, abrangendo as fases 1 a 5.
 
 ### **Documentação do Código: Sistema de Transcrição e Download YouTube (Fases 1-3)**
 

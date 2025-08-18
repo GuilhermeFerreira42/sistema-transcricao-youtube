@@ -232,294 +232,189 @@ Refatorar a base de código do backend e do frontend, aplicando princípios de m
 
 ---
 
-### **2. Fase 6: Aprimoramento da Arquitetura Modular**
+### **Checklist de Implementação Detalhado - Fases 6, 7 e 8**
 
-**2.1. Objetivo**
+Este documento fornece um checklist granular e exaustivo para a implementação das Fases 6, 7 e 8 do Sistema de Transcrição e Download do YouTube. As instruções são formuladas para serem literais, visando a execução precisa por parte dos desenvolvedores e a validação inequívoca pela equipe de testes.
 
-Implementar novas funcionalidades e otimizar recursos existentes, capitalizando sobre a arquitetura modular estabelecida na Fase 5 para expandir as capacidades de processamento e aprimorar as ferramentas de gerenciamento de histórico.
+-----
 
-**2.2. Requisitos Funcionais (RF)**
+### **Fase 6: Modularização do Core do YouTube**
 
-**2.2.1. RF-11: Busca Abrangente no Histórico**
+**Objetivo:** Refatorar o arquivo monolítico `youtube_handler.py`, desmembrando sua lógica em serviços coesos e com responsabilidades únicas, alinhando toda a arquitetura do backend a um padrão modular.
 
-*   **Descrição:** O sistema deve permitir que o usuário busque transcrições no histórico usando múltiplos critérios, incluindo termos de pesquisa, período de data, duração do vídeo e tipo de conteúdo (vídeo individual ou playlist).
-*   **Critérios de Aceitação:**
-    *   **2.2.1.1. Endpoint de Busca (Backend):**
-        *   [ ] Criar um novo endpoint `GET /search_history` em `backend/routes/history_routes.py`.
-        *   [ ] Este endpoint deve aceitar parâmetros de query string para os critérios de busca: `q` (termo de pesquisa), `start_date` (ISO 8601), `end_date` (ISO 8601), `duration` (`short`, `medium`, `long`), `type` (`video`, `playlist`).
-        *   [ ] O endpoint deve chamar um método de busca no `HistoryService` e retornar os resultados filtrados como um array JSON.
-    *   **2.2.1.2. Lógica de Busca (HistoryService):**
-        *   [ ] Implementar o método `search(self, query="", start_date=None, end_date=None, duration=None, content_type=None)` em `backend/services/history_service.py`.
-        *   [ ] Este método deve carregar todas as entradas do histórico e aplicar os filtros sequencialmente.
-        *   [ ] A filtragem por `query` deve ser case-insensitive e buscar no `title` e no `transcript` (se disponível no JSON do histórico ou carregado sob demanda).
-        *   [ ] A filtragem por `start_date` e `end_date` deve comparar com o campo `created_at` da entrada.
-        *   [ ] A filtragem por `duration` deve considerar: `short` (< 5 minutos / 300 segundos), `medium` (5-20 minutos / 300-1200 segundos), `long` (> 20 minutos / 1200 segundos). O campo `duration` deve ser adicionado aos metadados do vídeo no `history.json` durante o salvamento.
-        *   [ ] A filtragem por `type` deve considerar o campo `type` (`video` ou `playlist`) da entrada.
-        *   [ ] A busca deve ser otimizada para volumes moderados de dados (até 1000 entradas) sem a necessidade de um banco de dados relacional.
-    *   **2.2.1.3. Interface de Busca (Frontend):**
-        *   [ ] Adicionar uma interface de busca avançada na barra lateral do histórico (`frontend/static/js/ui.js`, `frontend/templates/index.html`).
-        *   [ ] Incluir campos de input para termo de pesquisa, seletores de data (início/fim), um dropdown para duração e um dropdown para tipo de conteúdo.
-        *   [ ] Implementar um mecanismo de "debounce" (300ms) para o campo de pesquisa textual para evitar requisições excessivas ao backend.
-        *   [ ] Um botão "Aplicar Filtros" deve ser visível para aplicar os filtros de data, duração e tipo.
-        *   [ ] Os resultados da busca devem ser renderizados na lista do histórico em tempo real.
-    *   **2.2.1.4. Integração API (Frontend):**
-        *   [ ] Adicionar um método `searchHistory(filters)` em `frontend/static/js/api.js` para chamar o novo endpoint `GET /search_history`.
-*   **Status:** Não Iniciado.
+#### **1. RF-22: Serviço de Interação com YouTube (`YouTubeService`)**
 
-**2.2.2. RF-12: Botão de Navegação "Voltar"**
+  * **Backend (Desenvolvimento):**
+      * [ ] Criar o arquivo `backend/services/youtube_service.py`.
+      * [ ] Dentro de `youtube_service.py`, criar a classe `YouTubeService`.
+      * [ ] Mover a função `_get_realistic_headers` de `youtube_handler.py` para `YouTubeService`.
+      * [ ] Mover a função `_add_random_delay` de `youtube_handler.py` para `YouTubeService`.
+      * [ ] Mover a função `_is_google_block` de `youtube_handler.py` para `YouTubeService`.
+      * [ ] Mover a função `_get_video_metadata` de `youtube_handler.py` para `YouTubeService`.
+      * [ ] Mover a função `get_playlist_info` de `youtube_handler.py` para `YouTubeService`.
+      * [ ] Criar um novo método `get_raw_transcript_and_metadata(url)` em `YouTubeService`.
+      * [ ] Mover para este novo método a lógica de `download_and_clean_transcript` que chama `YouTubeTranscriptApi` e o método de `fallback`.
+      * [ ] Mover a função `download_subtitles_fallback` de `youtube_handler.py` para `YouTubeService`.
+  * **Testes (QA):**
+      * [ ] Verificar se o `YouTubeService` consegue obter metadados de um vídeo individual.
+      * [ ] Verificar se o `YouTubeService` consegue obter a lista de vídeos de uma playlist.
+      * [ ] Verificar se o método de `fallback` é acionado para um vídeo que sabidamente falha na API primária.
+      * [ ] Confirmar que o serviço retorna a transcrição bruta (sem limpeza) e os metadados.
 
-*   **Descrição:** O sistema deve fornecer um botão "Voltar para a Playlist" quando o usuário estiver visualizando uma transcrição individual que faz parte de uma playlist.
-*   **Critérios de Aceitação:**
-    *   **2.2.2.1. Exibição Condicional:**
-        *   [ ] Quando a área central de visualização estiver exibindo uma transcrição de vídeo individual que possui um `playlist_id` associado (indicando que faz parte de uma playlist), um botão "Voltar para a Playlist" deve ser exibido.
-        *   [ ] O botão deve ser posicionado de forma proeminente e consistente na interface (ex: próximo ao título do vídeo ou na barra de ações).
-        *   [ ] O botão não deve ser exibido se o vídeo não pertencer a uma playlist ou se a visualização atual for de uma playlist completa.
-    *   **2.2.2.2. Funcionalidade de Navegação:**
-        *   [ ] Ao clicar no botão, o frontend deve carregar e exibir a visualização completa da playlist à qual o vídeo pertence.
-        *   [ ] A navegação deve ser feita via JavaScript, sem recarregar a página completa, mantendo a experiência de Single Page Application (SPA).
-*   **Status:** Não Iniciado.
+#### **2. RF-23: Serviço de Manipulação de Transcrições (`TranscriptionService`)**
 
-**2.2.3. RF-13: Exibição do Link Original do Vídeo**
+  * **Backend (Desenvolvimento):**
+      * [ ] Criar o arquivo `backend/services/transcription_service.py`.
+      * [ ] Dentro de `transcription_service.py`, criar a classe `TranscriptionService`.
+      * [ ] Mover a função `clean_subtitles` de `youtube_handler.py` para `TranscriptionService`.
+      * [ ] Mover a função `split_transcript_into_chunks` de `youtube_handler.py` para `TranscriptionService`.
+  * **Testes (QA):**
+      * [ ] Testar o método `clean_subtitles` com uma string de legenda bruta (formato VTT/SRT) e verificar se os timestamps e tags são removidos.
+      * [ ] Testar o método `split_transcript_into_chunks` com um texto longo e verificar se a lista de blocos é gerada corretamente, respeitando o limite de palavras.
 
-*   **Descrição:** O sistema deve exibir o link original do vídeo do YouTube na interface de visualização da transcrição, permitindo que o usuário acesse diretamente o vídeo no YouTube.
-*   **Critérios de Aceitação:**
-    *   **2.2.3.1. Link Visível:**
-        *   [ ] O link completo do vídeo do YouTube deve ser exibido de forma clara e acessível na área central de visualização da transcrição.
-    *   **2.2.3.2. Abertura em Nova Aba: ```markdown
-        *   [ ] O link deve ser clicável e abrir o vídeo correspondente no YouTube em uma nova aba.
-    *   **2.2.3.3. Links de Playlist (se aplicável):**
-        *   [ ] Para vídeos que fazem parte de uma playlist, o link deve ser formatado para levar ao vídeo específico dentro do contexto da playlist (ex: `https://www.youtube.com/watch?v=VIDEO_ID&list=PLAYLIST_ID&index=VIDEO_INDEX`).
-        *   [ ] O campo `playlist_index` deve ser adicionado aos metadados do vídeo no `history.json` durante o salvamento, se o vídeo for processado como parte de uma playlist.
-*   **Status:** Não Iniciado.
+#### **3. RF-24: Serviço de Gerenciamento de Arquivos (`FileService` - Hipotético, pois não foi solicitado, mas seria o próximo passo lógico)**
 
-**2.2.4. RF-14: Navegação para Página Inicial**
+#### **4. RF-25: Refatoração do Orquestrador (`ProcessingService`)**
 
-*   **Descrição:** O sistema deve fornecer um logotipo "Home" clicável no cabeçalho que leve o usuário de volta à página inicial do sistema (lista de histórico).
-*   **Critérios de Aceitação:**
-    *   **2.2.4.1. Elemento "Home":**
-        *   [ ] Um logotipo ou texto "Home" (ex: "YouTube Transcriber") deve ser exibido no canto superior esquerdo do cabeçalho da aplicação.
-        *   [ ] O elemento deve ser visualmente identificável como um botão ou link de navegação.
-    *   **2.2.4.2. Funcionalidade de Navegação:**
-        *   [ ] Ao clicar no elemento "Home", o frontend deve reinicializar a interface para o estado inicial, exibindo a lista completa do histórico e limpando a área de visualização central (ou exibindo uma mensagem de boas-vindas).
-        *   [ ] A navegação deve ser feita via JavaScript, sem recarregar a página completa.
-*   **Status:** Não Iniciado.
+  * **Backend (Desenvolvimento):**
+      * [ ] Modificar o `__init__` da classe `ProcessingService` para receber as instâncias dos novos serviços (`YouTubeService`, `TranscriptionService`, etc.).
+      * [ ] Em `app.py`, instanciar os novos serviços e injetá-los no `ProcessingService` ao criá-lo.
+      * [ ] Reescrever o método `process_video_task` para remover qualquer menção a `youtube_handler`.
+      * [ ] Implementar a nova sequência de chamadas em `process_video_task`:
+        1.  `youtube_service.get_raw_transcript_and_metadata()`
+        2.  `transcription_service.clean_subtitles()`
+        3.  `transcription_service.split_transcript_into_chunks()`
+        4.  `youtube_handler.save_transcription_to_json()` (temporário até a criação de um `FileService`).
+      * [ ] Garantir que os eventos `Socket.IO` (`video_progress`, `video_complete`, etc.) continuem sendo emitidos nos mesmos pontos do fluxo.
+  * **Testes (QA):**
+      * [ ] Processar um vídeo individual e verificar se a transcrição é gerada e salva corretamente, e se a UI é atualizada em tempo real.
+      * [ ] Processar uma playlist e verificar se todos os vídeos são processados e se a UI reflete o progresso corretamente.
+      * [ ] Verificar se o comportamento da aplicação para o usuário final permanece idêntico ao de antes da refatoração.
 
-**2.2.5. RF-15: Processamento de Múltiplas URLs**
+#### **5. Finalização da Fase**
 
-*   **Descrição:** O sistema deve permitir que o usuário insira múltiplas URLs do YouTube de uma vez para processamento em lote.
-*   **Critérios de Aceitação:**
-    *   **2.2.5.1. Interface de Entrada:**
-        *   [ ] Adicionar uma área de texto (`textarea`) na interface principal onde o usuário pode inserir várias URLs, uma por linha.
-        *   [ ] Um botão "Processar Múltiplas URLs" deve ser disponibilizado.
-    *   **2.2.5.2. Validação Individual (Backend):**
-        *   [ ] Criar um novo endpoint `POST /process_urls` em `backend/routes/transcription_routes.py` que aceita um array de URLs no corpo da requisição JSON.
-        *   [ ] O backend deve validar cada URL individualmente usando as funções utilitárias existentes (ex: `extract_video_id`).
-        *   [ ] Apenas as URLs válidas e únicas devem ser consideradas para processamento; URLs inválidas ou duplicadas devem ser ignoradas sem interromper o processo.
-    *   **2.2.5.3. Processamento em Lote (Backend):**
-        *   [ ] O `TranscriptionService` deve ser adaptado ou um novo método deve ser criado para orquestrar o processamento sequencial de cada URL válida.
-        *   [ ] Para cada URL, o processo de transcrição (chamando `download_and_clean_transcript`) deve ser iniciado.
-        *   [ ] O backend deve retornar um array de resultados, indicando o status (`success` ou `error`) e uma mensagem para cada URL processada.
-    *   **2.2.5.4. Feedback ao Usuário (Frontend):**
-        *   [ ] Durante o processamento em lote, o frontend deve exibir um feedback claro e detalhado para cada URL (ex: "Processando URL X...", "URL Y processada com sucesso", "Erro ao processar URL Z: [mensagem de erro]").
-        *   [ ] Um resumo final do processo (ex: "X URLs processadas com sucesso, Y com erro") deve ser exibido.
-        *   [ ] O histórico deve ser atualizado automaticamente após a conclusão do processamento em lote.
-*   **Status:** Não Iniciado.
+  * **Backend (Desenvolvimento):**
+      * [ ] Revisar todo o código e remover todas as chamadas remanescentes para `youtube_handler.py`.
+      * [ ] Excluir o arquivo `backend/youtube_handler.py`.
+  * **Testes (QA):**
+      * [ ] Executar um teste de regressão completo, incluindo processamento de vídeo, playlist, visualização do histórico e exclusão, para garantir que a remoção do `youtube_handler` não introduziu efeitos colaterais.
 
-**2.3. Requisitos Não Funcionais (RNF)**
+-----
 
-**2.3.1. RNF-15: Modularização do Código Frontend**
+### **Fase 7: Aprimoramento da Arquitetura Modular**
 
-*   **Descrição:** O código frontend deve ser organizado em módulos especializados com responsabilidades claramente definidas, conforme iniciado na Fase 5.
-*   **Critérios de Aceitação:**
-    *   **2.3.1.1. Redução de `main.js`:**
-        *   [ ] O arquivo `frontend/static/js/main.js` deve ser reduzido para apenas a lógica de inicialização do aplicativo.
-    *   **2.3.1.2. Responsabilidade Única:**
-        *   [ ] Cada módulo deve ter uma única responsabilidade bem definida, sem misturar lógicas.
-    *   **2.3.1.3. Comunicação entre Módulos:**
-        *   [ ] A comunicação entre módulos deve seguir padrões claramente definidos.
-    *   **2.3.1.4. Execução Imediata:**
-        *   [ ] Nenhum código deve ser executado imediatamente ao carregar um script de módulo (exceto definições de classes/funções e exportações).
-*   **Status:** Parcialmente Implementado (Requer revisão e refinamento contínuos).
+**Objetivo:** Implementar novas funcionalidades de gerenciamento de histórico e processamento em lote, capitalizando sobre a nova arquitetura modular.
 
-**2.3.2. RNF-16: Identidade Visual do Navegador (Favicon)**
+#### **1. RF-11: Busca Abrangente no Histórico**
 
-*   **Descrição:** O sistema deve ter um favicon personalizado que identifique visualmente o aplicativo no navegador.
-*   **Critérios de Aceitação:**
-    *   **2.3.2.1. Arquivo Favicon:**
-        *   [ ] Um arquivo `favicon.ico` deve ser adicionado ao diretório `frontend/static/img/`.
-    *   **2.3.2.2. Referência HTML:**
-        *   [ ] O favicon deve ser referenciado corretamente no `<head>` do `frontend/templates/index.html`.
-    *   **2.3.2.3. Visibilidade:**
-        *   [ ] O favicon deve ser visível e reconhecível nas abas do navegador, favoritos e atalhos em diferentes navegadores e sistemas operacionais.
-    *   **2.3.2.4. Representação:**
-        *   [ ] O favicon deve representar a identidade do aplicativo (transcrição de vídeos).
-*   **Status:** Não Iniciado.
+  * **Backend (Desenvolvimento):**
+      * [ ] Criar um novo endpoint `GET /search_history` em `backend/routes/history_routes.py`.
+      * [ ] Garantir que o endpoint aceite os parâmetros de query: `q`, `start_date`, `end_date`, `duration`, `type`.
+      * [ ] Implementar um novo método `search(...)` em `backend/services/history_service.py`.
+      * [ ] Dentro de `search`, implementar a lógica de filtragem para o termo de pesquisa (`q`) no título.
+      * [ ] Implementar a lógica de filtragem por intervalo de datas (`start_date`, `end_date`) comparando com o campo `created_at`.
+      * [ ] Implementar a lógica de filtragem por duração (`duration`), considerando: `short` (\< 300s), `medium` (300-1200s), `long` (\> 1200s).
+      * [ ] Implementar a lógica de filtragem por tipo de conteúdo (`type`: `video` ou `playlist`).
+  * **Frontend (Desenvolvimento):**
+      * [ ] Adicionar a estrutura HTML para a interface de busca avançada em `index.html` (campos de texto, seletores de data, dropdowns).
+      * [ ] Em `main.js`, adicionar um event listener ao botão "Aplicar Filtros".
+      * [ ] Implementar um mecanismo de *debounce* de 300ms no campo de texto da busca.
+      * [ ] Criar uma função `searchHistory(filters)` (no futuro `api.js`) para montar a URL e chamar o endpoint `GET /search_history`.
+      * [ ] Garantir que a função `loadHistory` seja chamada com os resultados da busca para renderizar a lista filtrada.
+  * **Testes (QA):**
+      * [ ] Testar a busca apenas com termo de texto e verificar se os resultados estão corretos.
+      * [ ] Testar a busca apenas com filtro de data e verificar a precisão.
+      * [ ] Testar a busca combinando múltiplos filtros (ex: playlists longas do último mês contendo a palavra "python").
+      * [ ] Verificar se o *debounce* funciona, observando as requisições de rede no navegador.
+      * [ ] Testar com um histórico grande (se possível, simulado) para avaliar o desempenho da busca.
 
-**2.3.3. RNF-25: Desempenho com Grandes Volumes de Dados**
+#### **2. RF-15: Processamento de Múltiplas URLs**
 
-*   **Descrição:** O sistema deve manter desempenho aceitável mesmo com grandes volumes de dados no histórico (1000+ entradas).
-*   **Critérios de Aceitação:**
-    *   **2.3.3.1. Busca no Histórico:**
-        *   [ ] A busca no histórico deve retornar resultados em menos de 1 segundo com 1000 entradas.
-    *   **2.3.3.2. Paginação/Virtualização (Frontend):**
-        *   [ ] Para listas de histórico com mais de 50 entradas, o frontend deve implementar paginação ou virtualização de listas.
-    *   **2.3.3.3. Carregamento Inicial:**
-        *   [ ] O carregamento inicial do histórico não deve travar a interface do usuário.
-    *   **2.3.3.4. Otimização de Memória (Backend):**
-        *   [ ] O `HistoryService` deve otimizar o carregamento e manipulação do `history.json`.
-*   **Status:** Não Iniciado.
+  * **Backend (Desenvolvimento):**
+      * [ ] Criar um novo endpoint `POST /process_urls` em `backend/routes/transcription_routes.py`.
+      * [ ] Implementar a lógica para receber um array de URLs do corpo da requisição.
+      * [ ] No backend, iterar sobre o array e, para cada URL, validar e iniciar o `ProcessingService` de forma sequencial.
+      * [ ] Coletar o resultado de cada processamento (sucesso ou erro) e retornar um array de resultados no final.
+  * **Frontend (Desenvolvimento):**
+      * [ ] Adicionar uma `textarea` e um botão "Processar Múltiplas URLs" em `index.html`.
+      * [ ] Em `main.js`, adicionar um event listener para o novo botão.
+      * [ ] A função do listener deve ler a `textarea`, dividir o conteúdo por quebras de linha, limpar e filtrar as URLs.
+      * [ ] Chamar o endpoint `POST /process_urls` enviando o array de URLs.
+      * [ ] Criar uma função para renderizar o resumo dos resultados (ex: "3 URLs processadas com sucesso, 1 com erro") e os detalhes de cada uma.
+  * **Testes (QA):**
+      * [ ] Testar com uma lista de URLs válidas e verificar se todas são processadas e o histórico é atualizado.
+      * [ ] Testar com uma lista mista (URLs válidas, inválidas, duplicadas) e verificar se apenas as válidas são processadas e se o feedback de erro para as inválidas é exibido corretamente.
+      * [ ] Verificar se a UI é atualizada corretamente após a conclusão do lote.
 
-**2.3.4. RNF-26: Feedback Visual para Operações em Lote**
+#### **3. RNF-16: Identidade Visual do Navegador (Favicon)**
 
-*   **Descrição:** O sistema deve fornecer feedback claro e detalhado durante operações de processamento em lote.
-*   **Critérios de Aceitação:**
-    *   **2.3.4.1. Progresso Individual:**
-        *   [ ] Durante o processamento de múltiplas URLs, o usuário deve ver o progresso de cada URL individualmente.
-    *   **2.3.4.2. Status Visual:**
-        *   [ ] O sistema deve indicar visualmente quais URLs foram processadas com sucesso e quais falharam.
-    *   **2.3.4.3. Resumo Final:**
-        *   [ ] Um resumo deve ser exibido ao final do processamento em lote.
-    *   **2.3.4.4. Cancelamento:**
-        *   [ ] O usuário deve poder cancelar o processamento em lote a qualquer momento.
-*   **Status:** Não Iniciado.
+  * **Frontend (Desenvolvimento):**
+      * [ ] Adicionar um arquivo `favicon.ico` ao diretório `frontend/static/` (ou `img/`).
+      * [ ] Adicionar a tag `<link rel="icon" href="/static/favicon.ico">` no `<head>` do `index.html`.
+  * **Testes (QA):**
+      * [ ] Abrir a aplicação no navegador e verificar se o favicon aparece na aba da página.
+      * [ ] Adicionar a página aos favoritos e verificar se o favicon é exibido.
 
----
+-----
 
-### **3. Fase 7: Refinamento de UX e Finalização**
+### **Fase 8: Refinamento de UX e Finalização**
 
-**3.1. Objetivo**
+**Objetivo:** Polir a aplicação, focando em temas, responsividade, feedback visual e acessibilidade para entregar uma experiência de usuário profissional.
 
-Refinar a aparência visual do sistema, garantir que ele seja totalmente acessível em diferentes dispositivos e implementar a personalização de temas, entregando uma experiência de usuário coesa e profissional.
+#### **1. RF-16 / RNF-08: Temas de Interface (Claro/Escuro)**
 
-**3.2. Requisitos Funcionais (RF)**
+  * **Frontend (Desenvolvimento):**
+      * [ ] Em `style.css`, definir variáveis CSS para cores, fundos e bordas no seletor `:root`.
+      * [ ] Criar um seletor `[data-theme="dark"]` em `style.css` que sobrescreve as variáveis para o tema escuro.
+      * [ ] Refatorar todo o `style.css` para usar as novas variáveis em vez de cores fixas.
+      * [ ] Em `main.js`, criar uma função `initTheme` para ser chamada no `DOMContentLoaded`.
+      * [ ] `initTheme` deve:
+        1.  Verificar se há um tema salvo no `localStorage`.
+        2.  Se não houver, verificar a preferência do SO com `window.matchMedia`.
+        3.  Aplicar o tema inicial definindo o atributo `data-theme` em `document.documentElement`.
+      * [ ] Adicionar um botão de alternância de tema ao `index.html`.
+      * [ ] Em `main.js`, adicionar um listener de clique a este botão que chame uma função `toggleTheme`.
+      * [ ] `toggleTheme` deve:
+        1.  Alternar o valor do atributo `data-theme` entre `light` e `dark`.
+        2.  Salvar a nova preferência no `localStorage`.
+        3.  Alternar o ícone do botão (lua/sol).
+  * **Testes (QA):**
+      * [ ] Verificar se a aplicação carrega o tema escuro por padrão se o SO estiver no modo escuro.
+      * [ ] Clicar no botão de alternância e verificar se todos os elementos da UI mudam de cor suavemente.
+      * [ ] Selecionar um tema, recarregar a página e verificar se a preferência foi mantida.
+      * [ ] Alternar entre os temas e navegar pela aplicação, garantindo que todos os componentes (modais, notificações, etc.) respeitem o tema ativo.
 
-**3.2.1. RF-16: Temas de Interface**
+#### **2. RF-17 / RNF-01: Responsividade Completa**
 
-*   **Descrição:** O sistema deve oferecer opção de tema claro e escuro.
-*   **Critérios de Aceitação:**
-    *   **3.2.1.1. Botão de Alternância:**
-        *   [ ] Deve haver um botão de alternância de tema visível e clicável no cabeçalho da aplicação.
-    *   **3.2.1.2. Persistência da Preferência:**
-        *   [ ] A preferência de tema do usuário deve ser salva no `localStorage`.
-    *   **3.2.1.3. Aplicação Consistente:**
-        *   [ ] Todos os elementos da interface devem respeitar o tema selecionado.
-    *   **3.2.1.4. Detecção de Preferência do Sistema:**
-        *   [ ] O sistema deve detectar a preferência de tema do sistema operacional do usuário.
-    *   **3.2.1.5. Transição Suave:**
-        *   [ ] A transição entre temas deve ser suave.
-*   **Status:** Não Iniciado.
+  * **Frontend (Desenvolvimento):**
+      * [ ] Adicionar a tag `<meta name="viewport" content="width=device-width, initial-scale=1.0">` em `index.html`.
+      * [ ] Em `style.css`, criar um bloco `@media (max-width: 768px)`.
+      * [ ] Dentro do media query, aplicar estilos para:
+        1.  Ocultar a `.sidebar` (ex: `position: fixed; left: -300px;`).
+        2.  Fazer o `.main-content` ocupar 100% da largura.
+        3.  Ajustar o tamanho de fontes e preenchimentos para melhor legibilidade.
+      * [ ] Criar um botão "hambúrguer" para o menu móvel em `index.html` (ou via JS) e estilizá-lo para aparecer apenas no media query.
+      * [ ] Em `main.js`, adicionar um listener ao botão hambúrguer que alterna uma classe (ex: `.active`) na `.sidebar`.
+      * [ ] Em `style.css`, adicionar uma regra `.sidebar.active { left: 0; }` para exibir o menu.
+  * **Testes (QA):**
+      * [ ] Usar as ferramentas de desenvolvedor do navegador para simular diferentes tamanhos de tela (celular, tablet).
+      * [ ] Verificar se a barra lateral desaparece e o botão de menu aparece abaixo de 768px de largura.
+      * [ ] Testar a funcionalidade de abrir e fechar o menu lateral no modo móvel.
+      * [ ] Garantir que todos os elementos interativos sejam grandes o suficiente para serem tocados facilmente.
+      * [ ] Se possível, testar em um dispositivo móvel real.
 
-**3.2.2. RF-17: Responsividade Completa**
+#### **3. RF-18: Feedback Visual Consistente**
 
-*   **Descrição:** A interface do sistema deve se adaptar fluidamente a diferentes larguras de tela.
-*   **Critérios de Aceitação:**
-    *   **3.2.2.1. Barra Lateral em Mobile:**
-        *   [ ] A barra lateral deve estar oculta por padrão em telas menores.
-        *   [ ] Um ícone de menu "hambúrguer" deve ser visível.
-    *   **3.2.2.2. Conteúdo Principal Responsivo:**
-        *   [ ] O conteúdo principal deve se ajustar automaticamente.
-    *   **3.2.2.3. Elementos Tocáveis:**
-        *   [ ] Todos os elementos interativos devem ter um tamanho mínimo de 44x44px.
-    *   **3.2.2.4. Testes em Dispositivos Reais:**
-        *   [ ] A interface deve ser testada em dispositivos reais.
-*   **Status:** Parcialmente Implementado.
+  * **Frontend (Desenvolvimento):**
+      * [ ] Criar uma função reutilizável `showNotification(message, type, duration)` em `main.js`.
+      * [ ] Esta função deve criar dinamicamente o HTML da notificação, adicioná-lo a um contêiner fixo na tela e removê-lo após a `duration`.
+      * [ ] Estilizar as notificações em `style.css` com cores diferentes para `success`, `error`, e `info`, usando as variáveis de tema.
+      * [ ] Refatorar todo o `main.js` para usar `showNotification` em vez de manipular o `statusMessage` diretamente.
+      * [ ] Refatorar o modal de exclusão para ser gerado pela função `showConfirmationModal(message, onConfirmCallback)`, tornando-o reutilizável.
+  * **Testes (QA):**
+      * [ ] Acionar uma operação de sucesso (processar vídeo) e verificar se a notificação verde aparece e some.
+      * [ ] Acionar um erro (URL inválida) e verificar a notificação vermelha.
+      * [ ] Clicar para excluir um item e verificar se o modal de confirmação padronizado é exibido.
+      * [ ] Garantir que as notificações e modais funcionem corretamente em ambos os temas (claro/escuro).
 
-**3.2.3. RF-18: Feedback Visual Consistente**
-
-*   **Descrição:** O sistema deve exibir modais ou notificações visualmente consistentes.
-*   **Critérios de Aceitação:**
-    *   **3.2.3.1. Componente Padronizado:**
-        *   [ ] Todas as mensagens de sucesso, erro e confirmação devem usar um componente de UI padronizado.
-    *   **3.2.3.2. Tempo de Exibição:**
-        *   [ ] Mensagens de sucesso devem desaparecer após 3 segundos.
-        *   [ ] Mensagens de erro devem desaparecer após 5 segundos.
-    *   **3.2.3.3. Paleta de Cores:**
-        *   [ ] As cores do componente de feedback devem seguir uma paleta consistente.
-    *   **3.2.3.4. Acessibilidade:**
-        *   [ ] O componente deve ser acessível via teclado e compatível com leitores de tela.
-    *   **3.2.3.5. Fechamento Manual:**
-        *   [ ] O usuário deve poder fechar manualmente notificações.
-*   **Status:** Parcialmente Implementado.
-
-**3.3. Requisitos Não Funcionais (RNF)**
-
-**3.3.1. RNF-01: Responsividade da Interface**
-
-*   **Descrição:** A interface deve ser responsiva e funcionar em diferentes tamanhos de tela.
-*   **Critérios de Aceitação:**
-    *   [ ] O layout deve se adaptar fluidamente.
-    *   [ ] Elementos de interface devem ajustar seu tamanho.
-    *   [ ] Testes em múltiplos dispositivos e navegadores.
-    *   [ ] Desempenho aceitável em diferentes resoluções.
-*   **Status:** Parcialmente Implementado.
-
-**3.3.2. RNF-06: Usabilidade Básica**
-
-*   **Descrição:** O sistema deve oferecer uma experiência de usuário intuitiva.
-*   **Critérios de Aceitação:**
-    *   [ ] Interface limpa e organizada.
-    *   [ ] Fluxo de trabalho lógico e previsível.
-    *   [ ] Feedback visual adequado.
-    *   [ ] Documentação de ajuda acessível.
-*   **Status:** Parcialmente Implementado.
-
-**3.3.3. RNF-07: Comportamento da Rolagem**
-
-*   **Descrição:** O sistema deve gerenciar a rolagem da conversa de forma inteligente.
-*   **Critérios de Aceitação:**
-    *   [ ] Rolagem automática para baixo quando próxima ao final.
-    *   [ ] Botão "Ir para o Final" quando o usuário estiver rolando para cima.
-    *   [ ] Não forçar rolagem para baixo se o usuário estiver lendo mensagens antigas.
-*   **Status:** Concluído.
-
-**3.3.4. RNF-08: Temas de Interface**
-
-*   **Descrição:** O sistema deve oferecer opção de tema claro e escuro.
-*   **Critérios de Aceitação:**
-    *   [ ] Botão de alternância visível.
-    *   [ ] Preferência salva no localStorage.
-    *   [ ] Detecção automática da preferência do sistema.
-    *   [ ] Transição suave entre temas.
-*   **Status:** Não Iniciado.
-
-**3.3.5. RNF-27: Consistência Visual**
-
-*   **Descrição:** O sistema deve ter um design visual consistente.
-*   **Critérios de Aceitação:**
-    *   [ ] Componentes reutilizáveis devem ter estilo consistente.
-    *   [ ] Não deve haver estilos "hardcoded".
-    *   [ ] Tipografia deve seguir uma hierarquia clara.
-    *   [ ] Estados de interação devem ser consistentes.
-*   **Status:** Parcialmente Implementado.
-
-**3.3.6. RNF-28: Acessibilidade (A11y)**
-
-*   **Descrição:** O sistema deve seguir padrões básicos de acessibilidade.
-*   **Critérios de Aceitação:**
-    *   [ ] Contraste adequado entre texto e fundo.
-    *   [ ] Todos os elementos interativos devem ser acessíveis via teclado.
-    *   [ ] Uso adequado de ARIA labels.
-    *   [ ] Estrutura semântica HTML correta.
-*   **Status:** Não Iniciado.
-
----
-
-### **Checklist de Conclusão de Fases**
-
-**Fase 5: Modularização Estrutural**
-*   [ ] Todos os requisitos funcionais (RF) implementados.
-*   [ ] Todos os requisitos não funcionais (RNF) implementados.
-*   [ ] Código revisado e testado.
-*   [ ] Documentação atualizada.
-
-**Fase 6: Aprimoramento da Arquitetura Modular**
-*   [ ] Todos os requisitos funcionais (RF) implementados.
-*   [ ] Todos os requisitos não funcionais (RNF) implementados.
-*   [ ] Código revisado e testado.
-*   [ ] Documentação atualizada.
-
-**Fase 7: Refinamento de UX e Finalização**
-*   [ ] Todos os requisitos funcionais (RF) implementados.
-*   [ ] Todos os requisitos não funcionais (RNF) implementados.
-*   [ ] Código revisado e testado.
-*   [ ] Documentação atualizada.
+-----
