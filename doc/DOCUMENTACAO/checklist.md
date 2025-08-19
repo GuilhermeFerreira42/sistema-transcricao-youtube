@@ -418,3 +418,320 @@ Este documento fornece um checklist granular e exaustivo para a implementação 
       * [ ] Garantir que as notificações e modais funcionem corretamente em ambos os temas (claro/escuro).
 
 -----
+
+### Checklist de Implementação e Testes - Fase 6: Documentação da Modularização do Arquivo do YouTube
+
+#### 1. Requisitos Funcionais (RF)
+
+##### RF-22: Modularização do `YouTubeHandler`
+
+###### Desenvolvimento
+* [ ] Criar arquivo `youtube_api_client.py` na pasta `src/services/`.
+* [ ] Implementar a classe `YouTubeAPIClient` no arquivo `youtube_api_client.py` com os seguintes métodos:
+    * [ ] `def __init__(self):` - Inicializar a classe.
+    * [ ] `def get_video_info(video_id):` - Implementar lógica para obter informações do vídeo.
+    * [ ] `def get_transcript(video_id):` - Implementar lógica para obter a transcrição do vídeo.
+* [ ] Criar arquivo `transcript_processor.py` na pasta `src/services/`.
+* [ ] Implementar a classe `TranscriptProcessor` no arquivo `transcript_processor.py` com os seguintes métodos:
+    * [ ] `def __init__(self):` - Inicializar a classe.
+    * [ ] `def clean_transcript(raw_transcript):` - Implementar lógica para limpar a transcrição.
+* [ ] Criar arquivo `file_manager.py` na pasta `src/services/`.
+* [ ] Implementar a classe `FileManager` no arquivo `file_manager.py` com os seguintes métodos:
+    * [ ] `def __init__(self):` - Inicializar a classe.
+    * [ ] `def save_transcript(video_id, transcript):` - Implementar lógica para salvar a transcrição em um arquivo.
+* [ ] Criar arquivo `processing_service.py` na pasta `src/services/`.
+* [ ] Implementar a classe `ProcessingService` no arquivo `processing_service.py` com o método:
+    * [ ] `def process_video(video_id):` - Implementar lógica para orquestrar o processamento do vídeo.
+* [ ] Atualizar o arquivo `history_service.py` para remover a lógica de gerenciamento de histórico do `YouTubeHandler`.
+* [ ] Atualizar o arquivo `app.py` para incluir as novas classes e serviços.
+* [ ] Atualizar o arquivo `download_routes.py` para utilizar os novos serviços.
+
+###### Testes (QA)
+* [ ] Testar a classe `YouTubeAPIClient`:
+    * [ ] Validar que `get_video_info(video_id)` retorna informações corretas para um vídeo válido.
+    * [ ] Validar que `get_transcript(video_id)` retorna a transcrição correta para um vídeo válido.
+* [ ] Testar a classe `TranscriptProcessor`:
+    * [ ] Validar que `clean_transcript(raw_transcript)` remove caracteres indesejados e formata a transcrição corretamente.
+* [ ] Testar a classe `FileManager`:
+    * [ ] Validar que `save_transcript(video_id, transcript)` salva a transcrição no formato correto e no local esperado.
+* [ ] Testar a classe `ProcessingService`:
+    * [ ] Validar que `process_video(video_id)` chama os métodos corretos na ordem correta e processa o vídeo como esperado.
+
+#### 2. Requisitos Não Funcionais (RNF)
+
+##### RNF-29: Coesão e Acoplamento
+
+###### Desenvolvimento
+* [ ] Revisar todas as classes criadas para garantir que cada uma tenha uma única responsabilidade.
+* [ ] Remover dependências diretas de `utils` no `YouTubeHandler`.
+
+###### Testes (QA)
+* [ ] Validar que cada classe criada possui métodos que são coesos e que não há acoplamento excessivo entre as classes.
+* [ ] Realizar uma análise de código para verificar a separação de responsabilidades.
+
+##### RNF-30: Testabilidade Aprimorada
+
+###### Desenvolvimento
+* [ ] Implementar testes unitários para cada método nas classes `YouTubeAPIClient`, `TranscriptProcessor`, `FileManager` e `ProcessingService`.
+
+###### Testes (QA)
+* [ ] Executar os testes unitários implementados e garantir que todos passem sem falhas.
+* [ ] Validar que a cobertura de testes atinge pelo menos 80% para cada classe.
+
+#### 3. Instruções de Implementação Detalhadas
+
+* [ ] Criar um diagrama de fluxo de dados que ilustre a interação entre `YouTubeAPIClient`, `TranscriptProcessor`, `FileManager` e `ProcessingService`.
+* [ ] Documentar cada classe e método criado com comentários explicativos e exemplos de uso.
+
+### Revisão Final
+* [ ] Verificar se cada item do checklist é uma ação atômica e pode ser atribuída, executada e validada de forma independente.
+* [ ] Garantir que não há ambiguidade nas instruções e que todos os nomes de arquivos, classes e métodos estão corretos e consistentes com a documentação.
+
+---
+
+### **Checklist de Implementação e Testes - Fase 7: Aprimoramento da Arquitetura Modular**  
+
+#### **1. Requisitos Funcionais (RF)**  
+
+##### **RF-23: Gerenciamento de Erros Aprimorado**  
+✅ **Desenvolvimento**  
+- [ ] Criar diretório `src/exceptions/` para centralizar exceções customizadas.  
+- [ ] Implementar exceções personalizadas em `src/exceptions/custom_errors.py`:  
+  - [ ] `class APIRequestError(Exception)` – Para erros de chamadas à API do YouTube.  
+  - [ ] `class TranscriptProcessingError(Exception)` – Para falhas durante o processamento de transcrições.  
+  - [ ] `class FileSaveError(Exception)` – Para problemas ao salvar arquivos.  
+- [ ] Adicionar logs estruturados:  
+  - [ ] Configurar `logging` em `src/config/logging_config.py`.  
+  - [ ] Adicionar logs críticos em `YouTubeAPIClient`, `TranscriptProcessor` e `FileManager`.  
+- [ ] Modificar `ProcessingService.process_video_task()` para capturar e tratar exceções.  
+
+✅ **Testes (QA)**  
+- [ ] Testar cenários de falha para cada exceção:  
+  - [ ] Forçar `APIRequestError` simulando falhas na API do YouTube (e.g., vídeo privado).  
+  - [ ] Forçar `TranscriptProcessingError` testando com transcrição malformada.  
+  - [ ] Forçar `FileSaveError` simulando permissões incorretas no sistema de arquivos.  
+- [ ] Verificar se os logs estão sendo registrados corretamente (`logs/app.log`).  
+
+---  
+
+##### **RF-24: Melhorias na Interface do Usuário**  
+✅ **Desenvolvimento**  
+- [ ] Adicionar **loaders** no frontend (`/static/js/ui.js`):  
+  - [ ] Criar função `showLoader(containerId)` para exibir animação de carregamento.  
+  - [ ] Criar função `hideLoader(containerId)` para ocultar após resposta da API.  
+- [ ] Implementar feedback visual para erros (`/static/css/error.css`):  
+  - [ ] Criar estilo `.error-toast` para exibir mensagens de erro temporárias.  
+  - [ ] Integrar com `fetch()` em `main.js` para erros de API.  
+- [ ] Garantir responsividade em telas menores (`/static/css/responsive.css`):  
+  - [ ] Ajustar tabela de histórico para scroll horizontal em móveis.  
+  - [ ] Redimensionar botões para melhor toque em dispositivos touch.  
+
+✅ **Testes (QA)**  
+- [ ] Testar UI em diferentes dispositivos (Chrome DevTools > Mobile View):  
+  - [ ] Verificar se loaders aparecem/dissolvem corretamente.  
+  - [ ] Simular erros e validar se `.error-toast` é exibido por 5 segundos.  
+  - [ ] Testar tabela de histórico em resoluções < 768px.  
+
+---  
+
+##### **RF-25: Otimização de Desempenho**  
+✅ **Desenvolvimento**  
+- [ ] Adicionar **cache com Redis** em `src/cache/redis_client.py`:  
+  - [ ] Configurar cliente Redis (`redis.Redis()`).  
+  - [ ] Implementar decorator `@cache_response(ttl=3600)` para armazenar respostas da API.  
+- [ ] Otimizar consultas ao histórico (`HistoryService.get_all()`):  
+  - [ ] Adicionar índice `video_id` no banco de dados (SQL: `CREATE INDEX IF NOT EXISTS idx_video_id ON history(video_id);`).  
+
+✅ **Testes (QA)**  
+- [ ] Medir tempo de resposta antes/depois do cache:  
+  - [ ] Chamar `YouTubeAPIClient.get_video_info()` duas vezes e comparar latência.  
+  - [ ] Verificar se `redis-cli` mostra as keys em cache (`KEYS *`).  
+
+---  
+
+#### **2. Requisitos Não Funcionais (RNF)**  
+
+##### **RNF-31: Desempenho**  
+✅ **Desenvolvimento**  
+- [ ] Configurar **Gzip** no Flask (`app.py`):  
+  ```python
+  from flask_compress import Compress
+  Compress(app)
+  ```
+- [ ] Habilitar **HTTP/2** no servidor de produção (Nginx/Apache).  
+
+✅ **Testes (QA)**  
+- [ ] Usar Lighthouse (Chrome) para avaliar performance:  
+  - [ ] Verificar se "First Contentful Paint" está abaixo de 1.5s.  
+  - [ ] Validar compressão via `curl -I -H "Accept-Encoding: gzip" http://localhost:5000`.  
+
+---  
+
+##### **RNF-32: Usabilidade**  
+✅ **Desenvolvimento**  
+- [ ] Adicionar **tooltips** em botões complexos (`/static/js/tooltips.js`):  
+  - [ ] Implementar `initTooltips()` usando `title` + CSS.  
+- [ ] Traduzir mensagens de sistema para inglês/português (`src/locales/`).  
+
+✅ **Testes (QA)**  
+- [ ] Testar tooltips em todos os botões (`history.js`, `download.js`).  
+- [ ] Verificar mudança de idioma no console: `localStorage.setItem("lang", "pt")`.  
+
+---  
+
+#### **3. Testes Automatizados (RF-26)**  
+✅ **Desenvolvimento**  
+- [ ] Criar `tests/integration/test_processing_flow.py`:  
+  - [ ] Testar fluxo completo `video_id → API → transcript → saved file`.  
+  - [ ] Mockar Redis para testes de cache.  
+- [ ] Configurar **GitHub Actions** (`.github/workflows/tests.yml`):  
+  - [ ] Executar testes unitários e de integração em PRs.  
+
+✅ **Testes (QA)**  
+- [ ] Rodar `pytest --cov=src/ --cov-report=term-missing` para validar cobertura ≥ 80%.  
+
+---  
+
+### **Revisão Final**  
+✅ **Validações Gerais**  
+- [ ] Todos os logs contêm timestamps e severity levels (`INFO`, `ERROR`).  
+- [ ] Nenhum `print()` ou depuração hardcoded permanece no código.  
+- [ ] README.md atualizado com instruções para cache/Redis.  
+
+---  
+
+**Notas:**  
+- Itens marcados com ✅ exigem confirmação de dois revisores.  
+- Priorizar tasks críticas (**Redis**, **Error Handling**, **UI Loaders**) antes de refinamentos.
+
+-------
+
+<SKIPPED_HTML_EDIT_MODE></SKIPPED_HTML_EDIT_MODE>
+### **Checklist de Implementação e Testes - Fase 8: Refinamento de UX e Finalização (Antiga Fase 7)**
+
+---
+
+#### **1. Requisitos Funcionais (RF)**  
+
+##### **RF-28: Sistema de Notificações**  
+✅ **Desenvolvimento**  
+- [ ] Criar componente `NotificationCenter` em `/static/js/notifications.js`:  
+  - [ ] Implementar função `showNotification(type, message)` com tipos: `success`, `error`, `warning`.  
+  - [ ] Adicionar estilos em `/static/css/notifications.css` para animações de entrada/saída.  
+- [ ] Integrar notificações em ações críticas:  
+  - [ ] Após download de transcrição (`success`).  
+  - [ ] Em erros de API (`error`).  
+
+✅ **Testes (QA)**  
+- [ ] Forçar todos os tipos de notificação e verificar:  
+  - [ ] Tempo de exibição (5s para `success`, 10s para `error`).  
+  - [ ] Responsividade em mobile (ocupar no máximo 80% da largura).  
+
+---
+
+##### **RF-29: Loaders e Estados de Carregamento**  
+✅ **Desenvolvimento**  
+- [ ] Criar componentes reutilizáveis em `/static/components/loaders/`:  
+  - [ ] `Spinner.js` (para ações rápidas <2s).  
+  - [ ] `ProgressBar.js` (para processamentos longos, ex.: transcrição).  
+- [ ] Atualizar `ProcessingService` para emitir eventos de progresso via Socket.IO.  
+
+✅ **Testes (QA)**  
+- [ ] Simular atrasos na API (ex.: `setTimeout` de 3s) e verificar:  
+  - [ ] Se `ProgressBar` reflete o estágio atual (ex.: "Obtendo transcrição... 50%").  
+
+---
+
+##### **RF-30: Cache Estratégico**  
+✅ **Desenvolvimento**  
+- [ ] Adicionar cache para resultados de buscas no histórico (`HistoryService`):  
+  - [ ] Implementar método `cache_search_query(query, results)` no Redis.  
+- [ ] Invalidar cache após novas inserções (`TTL=1h`).  
+
+✅ **Testes (QA)**  
+- [ ] Executar 2 buscas idênticas e validar:  
+  - [ ] Segunda consulta deve ser 50% mais rápida (medir com `console.time`).  
+
+---
+
+#### **2. Requisitos Não Funcionais (RNF)**  
+
+##### **RNF-33: Performance Frontend**  
+✅ **Desenvolvimento**  
+- [ ] Otimizar bundles JavaScript:  
+  - [ ] Configurar `Webpack` para code splitting (separar `vendor.js` e `app.js`).  
+- [ ] Pré-carregar fontes críticas (`<link rel="preload">`).  
+
+✅ **Testes (QA)**  
+- [ ] Usar Lighthouse para auditar:  
+  - [ ] "Reduce JavaScript execution time" deve ter score ≥90.  
+
+---
+
+##### **RNF-34: Acessibilidade**  
+✅ **Desenvolvimento**  
+- [ ] Adicionar atributos ARIA:  
+  - [ ] `aria-live="polite"` em `NotificationCenter`.  
+  - [ ] `aria-busy="true"` durante carregamentos.  
+- [ ] Garantir contraste ≥4.5:1 em textos (`/static/css/contrast.css`).  
+
+✅ **Testes (QA)**  
+- [ ] Executar Axe DevTools e corrigir falhas prioritárias.  
+
+---
+
+##### **RNF-35: Monitoramento**  
+✅ **Desenvolvimento**  
+- [ ] Configurar Sentry para captura de erros no frontend (`/static/js/monitoring.js`):  
+  - [ ] Inicializar com `Sentry.init({ dsn: ENV.SENTRY_DSN })`.  
+- [ ] Adicionar logging de métricas no backend (`src/monitoring/prometheus.py`).  
+
+✅ **Testes (QA)**  
+- [ ] Forçar um erro no frontend e verificar se aparece no dashboard do Sentry.  
+
+---
+
+#### **3. Componentes Críticos**  
+
+##### **HistoryList Component**  
+✅ **Desenvolvimento**  
+- [ ] Adicionar ordenação por data/alfabética em `/static/js/history.js`:  
+  - [ ] Implementar botões `sort-by-date` e `sort-by-title`.  
+- [ ] Paginação (10 itens por página).  
+
+✅ **Testes (QA)**  
+- [ ] Carregar 100 itens e verificar:  
+  - [ ] Tempo de renderização <500ms.  
+
+---
+
+##### **VideoProcessor Component**  
+✅ **Desenvolvimento**  
+- [ ] Adicionar preview de vídeo ao inserir URL (`youtube.com/embed/ID`).  
+- [ ] Validar formato de URL com regex em `main.js`:  
+  ```javascript
+  const YT_REGEX = /^(https?:\/\/)?(www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/;
+  ```
+
+✅ **Testes (QA)**  
+- [ ] Testar URLs inválidas e verificar mensagem de erro.  
+
+---
+
+#### **4. Pré-Deploy**  
+✅ **Validações Finais**  
+- [ ] Testes E2E com Cypress (10 cenários críticos).  
+- [ ] Verificar variáveis de ambiente em produção (`SENTRY_DSN`, `REDIS_URL`).  
+- [ ] Gerar relatório de cobertura final (`pytest --cov-report html`).  
+
+---
+
+### **Notas para a Equipe**  
+⚠️ **Prioridades:**  
+1. Notificações e acessibilidade são obrigatórias para release.  
+2. Performance deve ser validada em dispositivos low-end (ex.: Moto G4).  
+3. Monitoramento só entra em produção após revisão de segurança.  
+
+🔧 **Dicas:**  
+- Use `localStorage.setItem('debug', 'true')` para ativar logs detalhados no frontend.  
+- Commit messages devem referenciar RF/RNF (ex.: `[RF-28] Add notification system`).
